@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 外部への通信をブラウザの設定で止める（明細もプロフィールも、この端末の外へ出ない）。スクリプトはこのファイルに埋め込んだもの（ハッシュが一致するもの）だけを動かす -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-OwDsIYyOR/Z4gT8PZKSK9T7KkCz+hRRsa0+FcWADsDg='; style-src 'unsafe-inline'; img-src data: blob:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-a7a7GoB4073X9FFHHbSb0LBekswsKdcNJ1iV4tNpdCs='; style-src 'unsafe-inline'; img-src data: blob:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light">
 <meta name="description" content="副業の内容を手がかりに、カード・銀行の明細を「事業候補・私用候補・要判断」に仕分け、本人が確定してCSVに書き出す整理ツール。データはこの端末の外へ送りません。">
@@ -2458,7 +2458,7 @@ TG.reasonForCsv = function (row, r, d, withMemo, withAnswer) {
     if (d.purchase && withAnswer !== false) {
       var purposes = { biz: '仕事', pvt: '私用', ask: '混在・不明', split: '仕事・私用' };
       parts.push('本人回答：' + (d.purchase.item ? '購入品「' + d.purchase.item + '」' : '購入品は未記入') + '、' +
-        (d.purchase.purpose ? '用途「' + purposes[d.purchase.purpose] + '」' : '用途は未回答') + '。');
+        (d.purchase.purpose ? '用途「' + purposes[d.purchaseOriginalPurpose || d.purchase.purpose] + '」' : '用途は未回答') + '。');
     }
     if (d.memo && withMemo !== false) parts.push('本人メモ：' + d.memo);
   }
@@ -2557,7 +2557,10 @@ TG.contestData = function (rows, decisions) {
     var next = Object.assign({}, d);
     if (d.final === 'split') {
       next.final = ['biz', 'pvt'].indexOf(d.exportFinal) >= 0 ? d.exportFinal : '';
-      if (d.purchase) next.purchase = Object.assign({}, d.purchase, { purpose: next.final });
+      if (d.purchase) {
+        next.purchaseOriginalPurpose = d.purchase.purpose;
+        next.purchase = Object.assign({}, d.purchase, { purpose: next.final });
+      }
       var a = d.split || {};
       next.memo = (d.memo ? d.memo + ' ／ ' : '') + '本人が記録した内訳：仕事用 ' + TG.decimalText(a.biz) + '円、私用 ' + TG.decimalText(a.pvt) + '円';
     }
