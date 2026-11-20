@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 外部への通信をブラウザの設定で止める（明細もプロフィールも、この端末の外へ出ない）。スクリプトはこのファイルに埋め込んだもの（ハッシュが一致するもの）だけを動かす -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-UGZG+m4g+Z5f/Cd35OpC4VJwVbK2D4MfjE1LyOAKhJg='; style-src 'unsafe-inline'; img-src data: blob:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-ksFHmjVUNFS/2qljeSC/M6ceTG7tgNEunwsSePw3CVE='; style-src 'unsafe-inline'; img-src data: blob:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light">
 <meta name="description" content="副業の内容を手がかりに、カード・銀行の明細を「事業候補・私用候補・要判断」に仕分け、本人が確定してCSVに書き出す整理ツール。データはこの端末の外へ送りません。">
@@ -564,7 +564,7 @@ TG.TYPES = [
   { id: 'books', label: '本・書店', nature: 'dual', kw: [['書店', 4], ['書籍', 4], ['ブックストア', 4], ['ブックス', 2], ['BOOK', 2], ['本屋', 4], ['古書', 4], ['文庫', 2], ['蔦屋', 2], ['TSUTAYA', 2]] },
   { id: 'ebooks', label: '電子書籍', nature: 'dual', kw: [['電子書籍', 5], ['デジタル書籍', 5], ['KINDLE', 5], ['KOBO', 3, 'word'], ['電子コミック', 4]] },
   { id: 'magazine', label: '雑誌', nature: 'dual', kw: [['雑誌', 5], ['マガジン', 2]] },
-  { id: 'transit', label: '交通（電車・バス）', nature: 'dual', kw: [['交通系', 4], ['ICチャージ', 4], ['チャージ', 1], ['SUICA', 4], ['PASMO', 4], ['ICOCA', 4], ['MANACA', 4], ['TOICA', 4], ['SUGOCA', 4], ['乗車券', 4], ['定期券', 4], ['JR', 2, 'word'], ['鉄道', 4], ['電車', 4], ['地下鉄', 4], ['メトロ', 2], ['新幹線', 4], ['きっぷ', 2], ['切符', 2], ['運賃', 3], ['バス', 1]] },
+  { id: 'transit', label: '交通（電車・バス）', nature: 'dual', kw: [['交通系', 4], ['ICチャージ', 4], ['SUICA', 4], ['PASMO', 4], ['ICOCA', 4], ['MANACA', 4], ['TOICA', 4], ['SUGOCA', 4], ['乗車券', 4], ['定期券', 4], ['JR', 2, 'word'], ['鉄道', 4], ['電車', 4], ['地下鉄', 4], ['メトロ', 2], ['新幹線', 4], ['きっぷ', 2], ['切符', 2], ['運賃', 3], ['バス', 1]] },
   { id: 'taxi', label: 'タクシー', nature: 'dual', kw: [['タクシー', 5], ['TAXI', 4, 'word'], ['UBER', 3, 'word']] },
   { id: 'car', label: '車（ガソリン・駐車場・保険など）', nature: 'dual', kw: [['ガソリン', 5], ['給油', 5], ['ENEOS', 5], ['エネオス', 5], ['出光', 4], ['コスモ石油', 5], ['駐車場', 5], ['パーキング', 4], ['ETC', 4, 'word'], ['NEXCO', 4], ['高速道路', 4], ['車検', 5], ['オートバックス', 5], ['イエローハット', 5], ['洗車', 4], ['自動車', 2],
     [function (s, c) { return /(保険|損保|共済|ソンポ|ホケン)/.test(c) && /(自動車|車両|クルマ|ジドウシャ|マイカー)/.test(c); }, 10]] },
@@ -1868,12 +1868,36 @@ TG.P = function (sig) { return TG.isAns(sig) ? '追加の質問への答え（' 
 /* 一覧のカード用の短い引用 */
 TG.QS = function (sig) { return sig ? (sig.via === 'answer' ? '追加の質問の答え' : '「' + TG.reasonExcerpt(sig.short || sig.quote) + '」') : ''; };
 
+/* 乗車・残高の追加・買い物は、照合に使える記録が違う。 */
+TG.transportUse = function (type, desc) {
+  if (!type) return '';
+  if (type.id === 'taxi') return 'taxi';
+  if (type.id !== 'transit') return '';
+  var text = TG.readable(desc);
+  if (/チャージ|入金|残高追加/.test(text)) return 'charge';
+  if (/物販|買物|買い物|電子マネー決済/.test(text)) return 'purchase';
+  if (/乗車|運賃|鉄道|電車|バス|新幹線|定期券|きっぷ|切符|メトロ|地下鉄|JR/i.test(text)) return 'ride';
+  return 'ic';
+};
+TG.TRANSPORT_REVIEW = {
+  ride: ['乗車履歴と予定を照合', '乗車履歴の時刻・区間を、その日の予定と照らしてください。', 'この乗車は何のためでしたか？'],
+  taxi: ['乗降場所と予定を照合', '領収書の時刻・乗降場所を、その日の予定と照らしてください。', 'この乗車は何のためでしたか？'],
+  charge: ['残高に追加した金額', 'これは残高に追加した金額です。使い道はチャージ後の利用履歴で確認できます。', '今回チャージした分は何に使いましたか？'],
+  purchase: ['買い物の内容を確認', 'ICでの買い物です。レシートの日付と金額を照らし、買った品を確認してください。', '買ったものは何に使いましたか？'],
+  ic: ['ICの利用内容を確認', 'ICの表記だけでは利用内容が分かりません。利用履歴で乗車・買い物などの内訳を確かめてください。', '今回の利用は何のためでしたか？']
+};
+
 /* 明細ごとの下ごしらえ */
 TG.prepRow = function (row) {
   var noteText = row.itemNotes ? TG.purchaseNotes(row).join(' ') : (row.notesText || '');
   var text = (row.raw.desc || '') + ' ' + noteText;
   var forms = TG.textForms(text);
   var det = TG.detectType(forms, row.dir);
+  // 摘要が交通の取引を示していれば、訪問先・用事の備考で別の商品に読み替えない。
+  if (noteText && det.type && det.type.nature !== 'money' && det.type.id !== 'transit' && det.type.id !== 'taxi') {
+    var fromDesc = TG.detectType(TG.textForms(row.raw.desc), row.dir);
+    if (fromDesc.type && (fromDesc.type.id === 'transit' || fromDesc.type.id === 'taxi')) det = fromDesc;
+  }
   var base = (det.type && det.type.nature === 'money') ? TG.detectType(forms, row.dir, { noMoney: true }) : det;
   /* 「デジタル書籍 配信 テクノ書院」のように、本の種類＋技術系の言葉から技術書とみたときは、そう読んだことを名前に残す */
   var lbl = det.from ? '技術書・専門書（' + det.from.label + '）' : null;
@@ -1886,7 +1910,7 @@ TG.prepRow = function (row) {
   /* 摘要の中に出てくる順に並べる */
   var src = text;
   quoted.sort(function (a, b) { return src.indexOf(a) - src.indexOf(b); });
-  return { type: det.type, hits: det.hits, quoted: quoted, quotedFromNote: fromNote, base: base.type, lbl: lbl, forms: forms, tokens: TG.shopTokens(row.raw.desc), notes: [], pro: [], con: [] };
+  return { transport: TG.transportUse(base.type, row.raw.desc), type: det.type, hits: det.hits, quoted: quoted, quotedFromNote: fromNote, base: base.type, lbl: lbl, forms: forms, tokens: TG.shopTokens(row.raw.desc), notes: [], pro: [], con: [] };
 };
 
 /* 同じ日・同じ店（空白の違いは無視）・同じ金額 */
@@ -2025,6 +2049,7 @@ TG.purchaseNotes = function (row) {
 
 TG.needsPurchaseDetails = function (row, r, pp) {
   if (typeof r.needsPurchaseDetails === 'boolean') return r.needsPurchaseDetails;
+  if (r.transport) return false;
   if (!TG.canSpecifyPurchase(row, r)) return false;
   if (!TG.shopDescriptionOnly(row.raw.desc, r.type ? r.type.id : '')) return false;
   if (TG.purchaseNotes(row).length) return false;
@@ -2050,10 +2075,10 @@ TG.purchaseSuggestion = function (pp, answer) {
 
 /* 自分ルール：前に読み込んだ明細（今の明細以外）での本人の確定 */
 TG.ruleMatch = function (r, ctx, pp) {
-  if (!ctx || !ctx.rules || !ctx.rules.length || !r.tokens.length) return null;
+  if (r.transport || !ctx || !ctx.rules || !ctx.rules.length || !r.tokens.length) return null;
   var typeId = r.base ? r.base.id : (r.type ? r.type.id : '');
   var hits = ctx.rules.filter(function (e) {
-    if (e.final !== 'biz' && e.final !== 'pvt') return false;
+    if (e.type === 'transit' || e.type === 'taxi' || (e.final !== 'biz' && e.final !== 'pvt')) return false;
     if (e.datasetId === ctx.datasetId || !e.tokens || !TG.sameShop(e.tokens, r.tokens, e.type === typeId)) return false;
     return !TG.shopDescriptionOnly(e.desc, e.type) || !!TG.matchProfileMaterial(pp, e.desc);
   });
@@ -2173,6 +2198,14 @@ TG.decide = function (row, r, pp, ctx, rows, res, second) {
   if (t && t.id === 'card_bill') { TG.set(r, 'ask', 'card_bill', 'カードの引き落としのようです（中身はカードの明細にあります）', 'クレジットカードの利用代金の引き落としのようです。中身の支払いはカードの明細に1件ずつ載っているため、カードの明細も読み込む場合は、どちらで整理するかを決めておくと二重に数えずに済みます。'); return true; }
   if (t && t.nature === 'money') { TG.set(r, 'ask', 'money', t.label + 'です', t.label + 'のようです。確認をお願いします。'); return true; }
 
+  if (r.transport) {
+    var guide = TG.TRANSPORT_REVIEW[r.transport];
+    var sig = TG.linkOf(pp, t.id).sig;
+    var why = r.transport === 'ride' ? (r.dup ? '同日・同額の乗車が複数あります。' : '運賃からは移動の目的が分かりません。') : '';
+    TG.set(r, 'ask', 'transport', guide[0], why + guide[1]);
+    if (sig) { r.linkSig = sig; r.pro.push(TG.P(sig)); }
+    return true;
+  }
   if (TG.decideMaterial(row, r, pp)) return true;
 
   /* 4 判定表 → 5 摘要の仕事の言葉（区分を「上げる」方向にだけ使い、事業候補を要判断に下げない） */
@@ -2245,7 +2278,6 @@ TG.decideTable = function (row, r, pp, desc) {
     ? '「' + s.label + '」の質問には「' + s.ans + '」と回答しています。'
     : 'プロフィールには「' + TG.reasonExcerpt(s.quote) + '」とあります。');
   var purposeGap = '今回の支払いが仕事用か私用かは、明細だけでは分かりません。';
-  if (t.id === 'transit' && /チャージ/.test(TG.readable(desc))) purposeGap = 'チャージの記録だけでは、移動の目的は分かりません。';
   if (t.id === 'books' || t.id === 'ebooks' || t.id === 'magazine') purposeGap = 'この本を仕事の資料として買ったかは、明細だけでは分かりません。';
   if (t.id === 'telecom' || t.id === 'internet') purposeGap = 'この請求がどの回線の分か、利用明細で確かめてください。';
   if (L.link === 'neg') {
@@ -2313,7 +2345,7 @@ TG.findOriginal = function (row, r, rows, res, decisions) {
     if (!o.date || o.date.iso > row.date.iso || o.amount !== row.amount) return;
     if (res[j].type && res[j].type.id === 'refund') return;
     if (!TG.sameShop(res[j].tokens, r.tokens, true)) return;
-    individual = individual || (res[j].needsPurchaseDetails && !res[j].receiptFormOnly);
+    individual = individual || !!res[j].transport || (res[j].needsPurchaseDetails && !res[j].receiptFormOnly);
     candidates.push(j);
     var decision = decisions && decisions[o.key];
     categories.add((decision && decision.final) || res[j].cat);
@@ -2330,6 +2362,7 @@ TG.findOriginal = function (row, r, rows, res, decisions) {
 /* 要判断の確認で出す質問 */
 TG.questionFor = function (row, r) {
   if (r.needsPurchaseDetails) return 'このお店で何を購入し、今回何に使いましたか？';
+  if (r.rule === 'transport') return TG.TRANSPORT_REVIEW[r.transport][2];
   if (r.rule === 'purpose-conflict') return '今回の支払いは、ご自身の副業のためでしたか？';
   if (r.rule === 'unknown' && TG.purchaseNotes(row).length) return 'この日の利用内容は、副業のためのものでしたか？';
   if (r.rule === 'material' || r.rule === 'material-mixed') return '今回の「' + TG.reasonExcerpt(r.linkSig.word) + '」は、仕事で使うために買いましたか？';
@@ -2392,7 +2425,8 @@ TG.classifyAll = function (rows, pp, ctx) {
     /* 理由に使ったプロフィールの手がかり（一覧で、手がかりから明細をたどるため） */
     var used = r.rule === 'work-word' ? r.actSig : (r.rule === 'income-match' ? r.paySig : r.linkSig);
     r.sigIds = used ? [used.id || 'receive'] : [];
-    if (r.rule === 'purpose-conflict') r.typeLabel = '支払い';
+    if (r.rule === 'transport' && ['ic','charge','purchase'].indexOf(r.transport) >= 0) r.typeLabel = { ic: 'ICの利用', charge: 'チャージ', purchase: 'ICでの買い物' }[r.transport];
+    else if (r.rule === 'purpose-conflict') r.typeLabel = '支払い';
     else if (r.rule === 'material' || r.rule === 'material-mixed') r.typeLabel = '制作材料';
     else r.typeLabel = r.type ? (r.type.id === 'refund' && r.base ? r.base.label + 'の返金' : (r.lbl || r.type.label)) : '種類不明';
     if (row.amountBad !== undefined) r.notes.push({ kind: 'parse', text: '金額「' + TG.reasonExcerpt(row.amountBad) + '」を読み取れませんでした（書き出しは元のまま）。', short: '金額を読めません' });
@@ -2839,7 +2873,7 @@ TG.ruleUpsert = function (key, final) {
   if (i === undefined) return;
   var row = D.rows[i], r = D.res[i];
   S.rules = S.rules.filter(function (x) { return !(x.datasetId === S.ds.id && x.key === key); });
-  if (final === 'split' || r.needsPurchaseDetails || r.rule === 'purpose-conflict' || !r.tokens || !r.tokens.length) return;
+  if (final === 'split' || r.transport || r.needsPurchaseDetails || r.rule === 'purpose-conflict' || !r.tokens || !r.tokens.length) return;
   S.rules.push({ datasetId: S.ds.id, key: key, tokens: r.tokens, type: r.base ? r.base.id : (r.type ? r.type.id : ''), final: final, desc: row.raw.desc, dateLabel: row.date ? row.date.label : row.raw.date, file: S.ds.name, at: Date.now() });
   if (S.rules.length > 5000) S.rules = S.rules.slice(-5000);
 };
@@ -2863,14 +2897,14 @@ TG.ruleGroups = function () {
 /* 店名だけの取引は、参考表示にだけ含める。まとめて確定の候補からは外す。 */
 TG.sameShopRows = function (i, forRecall) {
   var D = TG.D, r = D.res[i], out = [];
-  if ((!forRecall && (r.needsPurchaseDetails || r.rule === 'purpose-conflict')) || !r.tokens || !r.tokens.length) return out;
+  if (r.transport || (!forRecall && (r.needsPurchaseDetails || r.rule === 'purpose-conflict')) || !r.tokens || !r.tokens.length) return out;
   var row = D.rows[i];
   var notes = JSON.stringify(TG.purchaseNotes(row).map(TG.norm));
   var t = r.base ? r.base.id : (r.type ? r.type.id : '');
   D.rows.forEach(function (row, j) {
-    if (j === i || (!forRecall && D.res[j].needsPurchaseDetails)) return;
+    if (j === i || D.res[j].transport || (!forRecall && D.res[j].needsPurchaseDetails)) return;
     var rj = D.res[j], tj = rj.base ? rj.base.id : (rj.type ? rj.type.id : '');
-    if (!forRecall && (r.cat !== rj.cat || rj.rule === 'purpose-conflict' || row.dir !== D.rows[j].dir || notes !== JSON.stringify(TG.purchaseNotes(D.rows[j]).map(TG.norm)))) return;
+    if (!forRecall && (r.cat !== rj.cat || rj.rule === 'purpose-conflict' || row.dir !== D.rows[i].dir || notes !== JSON.stringify(TG.purchaseNotes(D.rows[j]).map(TG.norm)))) return;
     if (TG.sameShop(rj.tokens, r.tokens, tj === t)) out.push(j);
   });
   return out;
@@ -3213,23 +3247,24 @@ TG.sameShopRows = function (i, forRecall) {
   TG.RV = null;
   var purchaseTimer = null;
   function purchaseDuplicateLine(row, r) {
-    return TG.needsPurchaseDetails(row, r) && r.notes.some(function (n) { return n.kind === 'dup'; }) ? '元明細の' + row.line + '行目' : '';
+    return (r.transport || TG.needsPurchaseDetails(row, r)) && r.notes.some(function (n) { return n.kind === 'dup'; }) ? '元明細の' + row.line + '行目' : '';
   }
   function purchaseForm(key, d) {
     var i = D.byKey[key], row = D.rows[i], answer = S.purchaseDetails[key] || {};
     var canSplit = TG.canSplitPurchase(row, D.res[i]);
+    var transport = D.res[i].transport;
     var choices = [['', '用途を選ぶ'], ['biz', '仕事用'], ['pvt', '私用']];
     if (canSplit) choices.push(['split', '仕事用と私用に分ける']);
     choices.push(['ask', '内訳・用途がまだ分からない（保留）']);
     var amounts = answer.split || (d && d.split) || {};
-    return '<div class="rv-purchase" data-key="' + esc(key) + '"><h3 class="q">この支払いの購入内容</h3>' +
-      '<label for="rv-purchase-item">何を買いましたか？ <small>覚えている範囲で</small></label>' +
-      '<input type="text" id="rv-purchase-item" maxlength="200" value="' + esc(answer.item || '') + '" placeholder="レシートや注文履歴にある品名">' +
+    return '<div class="rv-purchase" data-key="' + esc(key) + '"><h3 class="q">' + (transport ? '今回の利用内容' : 'この支払いの購入内容') + '</h3>' +
+      '<label for="rv-purchase-item">' + (transport ? 'どんな利用でしたか？' : '何を買いましたか？') + ' <small>覚えている範囲で</small></label>' +
+      '<input type="text" id="rv-purchase-item" maxlength="200" value="' + esc(answer.item || '') + '" placeholder="' + (transport ? '利用履歴にある区間や品名' : 'レシートや注文履歴にある品名') + '">' +
       '<label for="rv-purchase-purpose">何に使いましたか？</label><select id="rv-purchase-purpose">' +
       choices.map(function (p) {
         return '<option value="' + p[0] + '"' + ((answer.purpose || '') === p[0] ? ' selected' : '') + '>' + p[1] + '</option>';
       }).join('') + '</select>' +
-      (canSplit ? '<fieldset id="rv-split" hidden><legend>レシートの内訳</legend><div class="split-inputs">' +
+      (canSplit ? '<fieldset id="rv-split" hidden><legend>' + (transport ? '利用履歴の内訳' : 'レシートの内訳') + '</legend><div class="split-inputs">' +
         '<label for="rv-split-biz">仕事用金額（円）<input id="rv-split-biz" type="text" inputmode="decimal" autocomplete="off" value="' + esc(amounts.biz == null ? '' : String(amounts.biz)) + '"></label>' +
         '<label for="rv-split-pvt">私用金額（円）<input id="rv-split-pvt" type="text" inputmode="decimal" autocomplete="off" value="' + esc(amounts.pvt == null ? '' : String(amounts.pvt)) + '"></label></div>' +
         '<p id="rv-split-status" role="status"></p></fieldset>' : '') +
@@ -3307,6 +3342,7 @@ TG.sameShopRows = function (i, forRecall) {
     if (sourceLine) title += ' <small>' + sourceLine + '</small>';
     var meter = R.mode === 'queue' ? '<span class="rv-meter" aria-hidden="true">' + R.queue.map(function (k, p) { return '<i class="' + (p === R.pos ? 'c' : (S.dec[k] ? 'd' : '')) + '"></i>'; }).join('') + '</span>' : catChip(r.cat);
     var purchase = TG.needsPurchaseDetails(row, r);
+    var offerHold = r.rule === 'transport' && !d && !purchase;
     var same = purchase ? [] : TG.sameShopRows(i).filter(function (j) { return !S.dec[D.rows[j].key] && !TG.needsPurchaseDetails(D.rows[j], D.res[j]); });
     var allSame = TG.sameShopRows(i, true);
     var recall = [];
@@ -3330,15 +3366,15 @@ TG.sameShopRows = function (i, forRecall) {
       '<div class="rv-q">' + (purchase ? purchaseForm(key, d) : '<p class="q" id="rv-q">' + esc(r.question) + '</p>' +
       '<div class="rv-btns" role="group" aria-labelledby="rv-q"><button type="button" class="btn biz" data-act="rv-decide" data-final="biz" aria-pressed="' + (!!d && d.final === 'biz') + '">事業<small>' + bizSub + (R.mode === 'queue' ? '（←）' : '') + '</small></button>' +
       '<button type="button" class="btn pvt" data-act="rv-decide" data-final="pvt" aria-pressed="' + (!!d && d.final === 'pvt') + '">私用<small>' + pvtSub + (R.mode === 'queue' ? '（→）' : '') + '</small></button></div>') +
-      '<div class="rv-opts">' + (same.length ? '<label class="same"><input type="checkbox" id="rv-same"><span>同じ店のほかの未確認 ' + same.length + '件（' + same.slice(0, 3).map(function (j) { return dateLbl(D.rows[j]) + ' ' + amt(D.rows[j]) + '円'; }).join('、') + (same.length > 3 ? ' など' : '') + '）にも、同じ区分を付ける</span></label>' : '') +
-      (!purchase && TG.canSpecifyPurchase(row, r) ? '<div><button type="button" class="btn link" data-act="rv-start-purchase">購入品・用途を追記する</button></div>' : '') +
-      (!purchase && TG.canSplitPurchase(row, r) ? '<div><button type="button" class="btn link" data-act="rv-start-split">レシートの金額を仕事用と私用に分ける</button></div>' : '') +
+      '<div class="rv-opts">' + (offerHold ? '<button type="button" class="btn sm" ' + (R.mode === 'queue' ? 'data-act="rv-skip"' : 'data-act="close" data-dlg="dlg-review"') + '>記録を見てあとで決める</button>' : '') + (same.length ? '<label class="same"><input type="checkbox" id="rv-same"><span>同じ店のほかの未確認 ' + same.length + '件（' + same.slice(0, 3).map(function (j) { return dateLbl(D.rows[j]) + ' ' + amt(D.rows[j]) + '円'; }).join('、') + (same.length > 3 ? ' など' : '') + '）にも、同じ区分を付ける</span></label>' : '') +
+      (!purchase && !r.transport && TG.canSpecifyPurchase(row, r) ? '<div><button type="button" class="btn link" data-act="rv-start-purchase">購入品・用途を追記する</button></div>' : '') +
+      (!purchase && TG.canSplitPurchase(row, r) ? '<div><button type="button" class="btn link" data-act="rv-start-split">' + (r.transport ? '利用額を仕事用と私用に分ける' : 'レシートの金額を仕事用と私用に分ける') + '</button></div>' : '') +
       '<label class="memo"><span>メモ（任意。CSVの理由に残ります）</span><input type="text" id="rv-memo" maxlength="200" value="' + esc(d ? d.memo : ((S.purchaseDetails[key] || {}).memoDraft || '')) + '" placeholder="' + (row.dir === 'in' ? '入金の心当たりや照合した記録' : '何に使ったか、何を見て確かめたか') + '"></label>' +
       (purchase ? '<button type="button" class="btn primary" data-act="rv-purchase-confirm" id="rv-purchase-confirm"></button>' : '') + '</div></div></div>';
     var foot = '<div class="dlg-f">' + (R.mode === 'queue'
-      ? '<button type="button" class="btn" data-act="rv-prev"' + (R.pos ? '' : ' disabled') + '>前へ</button><button type="button" class="btn" data-act="rv-skip">あとで' + (purchase ? '' : '（↓）') + '</button>' + (R.undo.length ? '<button type="button" class="btn" data-act="rv-undo">元に戻す</button>' : '') + '<span class="grow"></span>' + (purchase ? '' : '<span class="kbd">←</span><span class="kbd">→</span><span class="kbd">↓</span><span class="kbd">Z</span>')
+      ? '<button type="button" class="btn" data-act="rv-prev"' + (R.pos ? '' : ' disabled') + '>前へ</button>' + (offerHold ? '' : '<button type="button" class="btn" data-act="rv-skip">あとで' + (purchase ? '' : '（↓）') + '</button>') + (R.undo.length ? '<button type="button" class="btn" data-act="rv-undo">元に戻す</button>' : '') + '<span class="grow"></span>' + (purchase ? '' : '<span class="kbd">←</span><span class="kbd">→</span><span class="kbd">↓</span><span class="kbd">Z</span>')
       : (d ? '<button type="button" class="btn" data-act="rv-clear">未確認に戻す</button>' : '') + '<span class="grow"></span><button type="button" class="btn" data-act="close" data-dlg="dlg-review">' + (d ? '閉じる' : '確定せず一覧に戻る') + '</button>') + '</div>';
-    inner.innerHTML = dlgHead('dlg-review', title, meter) + body + foot;
+    inner.innerHTML = dlgHead('dlg-review', title, meter) + body + (offerHold && R.mode !== 'queue' ? '' : foot);
     if (purchase) updatePurchaseForm(false);
     $('.dlg-b', inner).scrollTop = 0;
     $('.rv-desc', inner).focus({ preventScroll: true });
@@ -3537,13 +3573,14 @@ TG.sameShopRows = function (i, forRecall) {
       '<h3 style="font-size:14px;margin:0">1. 判定表</h3>' +
       '<table class="rule-tbl"><thead><tr><th>明細の種類 ＼ プロフィール</th><th>直接の記述がある</th><th>関係しうる記述がある</th><th>記述がない</th></tr></thead><tbody>' +
       '<tr><th>仕事向け<small>AIツール・校正ツール・素材・サーバー・ドメイン・コワーキング など</small></th><td>' + c('biz') + '</td><td>' + c('ask') + '</td><td>' + c('ask') + '</td></tr>' +
-      '<tr><th>どちらにも使う<small>本・通信・交通・家電・郵送・通販・家賃・電気代 など</small></th><td>' + c('ask') + '</td><td>' + c('ask') + '</td><td>' + c('pvt') + '<small>1万円以上は要判断</small></td></tr>' +
+      '<tr><th>どちらにも使う<small>本・通信・家電・郵送・通販・家賃・電気代 など</small></th><td>' + c('ask') + '</td><td>' + c('ask') + '</td><td>' + c('pvt') + '<small>1万円以上は要判断</small></td></tr>' +
+      '<tr><th>電車・バス・タクシー・交通系IC</th><td colspan="3">要判断。乗車・買い物・チャージごとに用途を確認します。</td></tr>' +
       '<tr><th>生活<small>食料品・ドラッグストア・映画・美容・ジム・飲食 など</small></th><td>' + c('ask') + '</td><td>' + c('pvt') + '</td><td>' + c('pvt') + '</td></tr>' +
       '<tr><th>種類が分からない</th><td>' + c('ask') + '</td><td>' + c('ask') + '</td><td>' + c('ask') + '</td></tr></tbody></table>' +
       '<p class="lane-d" style="margin:0 0 10px">例：「文章校正ツール」と書いた人の校正ツールの支払いは事業候補。「参考資料の書籍」と書いた人の書店の支払いは、私用の本もありうるので要判断。</p>' +
       '<h3 style="font-size:14px;margin:0">2. 判定表より先に見ること（上から順に）</h3><ol class="ol">' +
       '<li>日付・金額を読み取れない明細、摘要が空欄の明細は要判断にします。</li>' +
-      '<li>自分ルール：前の明細で同じ店を確定していれば、その区分の候補にします。事業と私用の記録が両方ある店は要判断です。</li>' +
+      '<li>自分ルール：交通の明細は1件ずつ確認します。ほかの種類では、前の明細で同じ店を確定していれば、その区分の候補にします。事業と私用の記録が両方ある店は要判断です。</li>' +
       '<li>返金：返金日までの同じ店・同じ金額の支払いを探します。元の支払いが見つかれば、その候補にそろえます。見つからないときは自分ルールを参照し、手がかりが足りなければ要判断にします。</li>' +
       '<li>入金：プロフィールの受け取り元（「編集部から」「アプリストアから」など）と一致すれば事業候補。利息・給与は私用候補。それ以外は要判断。</li>' +
       '<li>ATMの引き出し・振込・カードの引き落とし：使い道が明細から分からないので要判断。</li>' +
