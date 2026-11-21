@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 外部への通信をブラウザの設定で止める（明細もプロフィールも、この端末の外へ出ない）。スクリプトはこのファイルに埋め込んだもの（ハッシュが一致するもの）だけを動かす -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-0uvBL197hbpsy1AU8lAkadw4e0aQW92fFx8C6QyU5h0='; style-src 'unsafe-inline'; img-src data: blob:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-dnpHohGy0PIhqFCi8SoyyaaFEJKPb6gfDnC83xNEI0E='; style-src 'unsafe-inline'; img-src data: blob:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light">
 <meta name="description" content="副業の内容を手がかりに、カード・銀行の明細を「事業候補・私用候補・要判断」に仕分け、本人が確定してCSVに書き出す整理ツール。データはこの端末の外へ送りません。">
@@ -171,6 +171,8 @@ main { max-width: 1240px; margin: 0 auto; padding: 18px 20px 60px; }
 .next { display: flex; align-items: center; gap: 14px; background: var(--ink); color: #fff; border-radius: var(--r); padding: 12px 16px; margin: 0 0 12px; }
 .trip-work { margin: 0 0 14px; padding: 14px 16px; border: 1px solid var(--line-2); border-left: 4px solid var(--ask-ink); border-radius: var(--r); background: var(--ask-bg); }
 .trip-work h2 { font-size: 17px; margin: 0; }
+.trip-work h3 { font-size: 14px; margin: 8px 0 4px; }
+.trip-start { padding-bottom: 10px; border-bottom: 1px solid var(--line-2); }
 .trip-work p { margin: 4px 0 12px; font-size: 14px; }
 .trip-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .trip-actions .btn { min-height: 36px; white-space: normal; }
@@ -296,6 +298,7 @@ dialog.dlg::backdrop { background: rgba(20, 22, 26, .45); }
 .dlg-in { display: flex; flex-direction: column; max-height: calc(100vh - 32px); }
 .dlg-h { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
 .dlg-h h2 { margin: 0; font-size: 17px; }
+.dlg-review .dlg-h h2 small { display: inline-block; white-space: nowrap; }
 .dlg-h .x { margin-left: auto; border: 0; background: none; width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; }
 .dlg-h .x:hover { background: var(--sunken); }
 .dlg-h .x svg { width: 20px; height: 20px; }
@@ -2206,8 +2209,13 @@ TG.decide = function (row, r, pp, ctx, rows, res, second) {
   if (r.transport) {
     var guide = TG.TRANSPORT_REVIEW[r.transport];
     var sig = TG.linkOf(pp, t.id).sig;
-    var why = r.transport === 'ride' ? (r.dup ? '同日・同額の乗車が複数あります。' : '運賃からは移動の目的が分かりません。') : '';
-    TG.set(r, 'ask', 'transport', guide[0], why + guide[1]);
+    var reason = guide[1];
+    if (r.transport === 'ride') {
+      reason = r.dup ? '同日・同額の乗車が複数あります。元明細の' + row.line +
+        '行目の利用詳細で、時刻・区間を予定表と照合してください。対応が分からなければ保留できます。' :
+        '運賃からは移動の目的が分かりません。' + reason;
+    }
+    TG.set(r, 'ask', 'transport', guide[0], reason);
     if (sig) { r.linkSig = sig; r.pro.push(TG.P(sig)); }
     return true;
   }
@@ -3230,13 +3238,14 @@ TG.sameShopRows = function (i, forRecall) {
   function transitPanel(work) {
     if (!work.open.length) return '';
     var buttons = [], hint;
+    var direct = work.open.length > work.held.length;
     if (work.ready.length) {
       hint = '備考を読んで乗車ごとに用途を選べます。';
       if (work.later.length) hint += '残りの' + work.later.length + '件は記録待ちに移します。';
-      buttons.push(transitButton('ready', '備考のある乗車 ' + work.ready.length + '件を確認', true));
+      buttons.push(transitButton('ready', '備考のある乗車 ' + work.ready.length + '件を確認'));
     } else if (work.later.length) {
-      hint = '履歴やレシートが手元にある利用から確認できます。';
-      buttons.push(transitButton('later', '未確認の' + work.later.length + '件を開く', true));
+      hint = '手元にない記録はあとから確認できます。';
+      buttons.push(transitButton('later', '手元の記録から確認する（' + work.later.length + '件）'));
       buttons.push(transitButton('park', work.later.length + '件を記録待ちにする'));
     } else hint = '手元にそろった記録を選ぶと、その利用だけを再開できます。';
     if (work.held.length) {
@@ -3246,7 +3255,11 @@ TG.sameShopRows = function (i, forRecall) {
       buttons.push(transitButton('held','記録待ち '+work.held.length+'件を開く',!buttons.length));
     }
     var title = work.open.length === work.held.length ? '交通の記録待ち ' + work.held.length + '件' : '交通の利用を確認';
-    return '<section class="trip-work" aria-label="交通の確認"><h2>' + title + '</h2><p>' + hint + '</p><div class="trip-actions">' + buttons.join('') + '</div></section>';
+    return '<section class="trip-work" aria-label="交通の確認"><h2>' + title + '</h2>' +
+      (direct ? '<div class="trip-start"><h3>記録が全部そろっている</h3>' +
+        transitButton('open', '元明細順に' + work.open.length + '件を確認', true) +
+        '</div><h3>記録が一部だけある・あとでそろう</h3>' : '') +
+      '<p>' + hint + '</p><div class="trip-actions">' + buttons.join('') + '</div></section>';
   }
   function openTransitGroup(button) {
     var work = transitWork(), group = button.getAttribute('data-group');
@@ -3257,7 +3270,7 @@ TG.sameShopRows = function (i, forRecall) {
     }
     if (group === 'park') { render(); say('記録待ちに保存しました'); return; }
     var keys = work.byRecord[group] || work[group];
-    if (keys && keys.length) openReview(keys, 'queue', true);
+    if (keys && keys.length) openReview(keys, 'queue', group === 'open' ? 'all-records' : true);
   }
   function deferReview() {
     var R = TG.RV, key = R.queue[R.pos], r = D.res[D.byKey[key]];
@@ -3328,6 +3341,7 @@ TG.sameShopRows = function (i, forRecall) {
   /* ---------- 要判断の確認（1件ずつ）・明細の詳細 ---------- */
   TG.RV = null;
   var purchaseTimer = null;
+  var lastTransitReview = null;
   function purchaseDuplicateLine(row, r) {
     return (r.transport || TG.needsPurchaseDetails(row, r)) && r.notes.some(function (n) { return n.kind === 'dup'; }) ? '元明細の' + row.line + '行目' : '';
   }
@@ -3411,6 +3425,12 @@ TG.sameShopRows = function (i, forRecall) {
     var inner = $('.dlg-in', dlg);
     if (R.mode === 'queue' && R.pos >= R.queue.length) {
       var t = D.tally, left = R.queue.filter(function (k) { return !S.dec[k]; }).length, bl = t.biz.n - t.biz.done, pl = t.pvt.n - t.pvt.done;
+      if (R.grouped === 'all-records' && t.done === t.all && R.undo.length) {
+        lastTransitReview = { dataset: S.ds.id, key: R.queue[R.undo[R.undo.length - 1].pos] };
+        TG._afterReview = function () { go('export'); };
+        dlg.close();
+        return;
+      }
       if (R.grouped && t.ask.n > t.ask.done) {
         var waiting = transitWork().held.length;
         inner.innerHTML = dlgHead('dlg-review', R.grouped === 'other' ? '明細の確認' : '交通の確認') + '<div class="dlg-b"><h3>今回の確認はここまでです</h3><p>確定 ' + t.done + ' / ' + t.all + '件。交通の記録待ちは ' + waiting + '件です。</p></div><div class="dlg-f">' + (R.undo.length ? '<button class="btn" data-act="rv-undo">元に戻す</button>' : '') + '<span class="grow"></span><button class="btn primary" data-act="close" data-dlg="dlg-review">一覧に戻る</button></div>';
@@ -3426,7 +3446,7 @@ TG.sameShopRows = function (i, forRecall) {
     }
     var key = R.queue[R.pos], i = D.byKey[key], row = D.rows[i], r = D.res[i], d = S.dec[key];
     var title = R.mode === 'queue' ? '要判断の確認 <span class="num">' + (R.pos + 1) + ' / ' + R.queue.length + '</span>' : '明細の確認';
-    var sourceLine = purchaseDuplicateLine(row, r);
+    var sourceLine = R.grouped === 'all-records' ? '元明細の' + row.line + '行目' : purchaseDuplicateLine(row, r);
     if (sourceLine) title += ' <small>' + sourceLine + '</small>';
     var meter = R.mode === 'queue' ? '<span class="rv-meter" aria-hidden="true">' + R.queue.map(function (k, p) { return '<i class="' + (p === R.pos ? 'c' : (S.dec[k] ? 'd' : '')) + '"></i>'; }).join('') + '</span>' : catChip(r.cat);
     var purchase = TG.needsPurchaseDetails(row, r);
@@ -3445,7 +3465,14 @@ TG.sameShopRows = function (i, forRecall) {
     var body = '<div class="dlg-b">' +
       '<div class="rv-item"><div class="rv-date">' + dateFull(row) + '</div><div class="rv-desc" tabindex="-1">' + esc(row.raw.desc || '（摘要なし）') + '</div>' + reading +
       '<div class="rv-amt num">' + amt(row) + '円<small>' + inOut + (fmtNote.length ? '（元の表記：' + esc(row.raw.amount) + '）' : '') + '</small></div>' +
-      '<div class="rv-tags"><span class="tag">' + esc(r.typeLabel) + '</span>' + r.notes.filter(function (n) { return n.short; }).map(function (n) { return '<span class="tag' + ((n.kind === 'dup' || n.kind === 'parse') ? ' warn' : '') + '">' + esc(n.short) + '</span>'; }).join('') + '</div></div>' +
+      '<div class="rv-tags"><span class="tag">' + esc(r.typeLabel) + '</span>' + r.notes.filter(function (n) { return n.short; }).map(function (n) {
+        var label = n.short;
+        if (n.kind === 'dup' && r.transport) {
+          var ordinal = 1 + r.dup.filter(function (j) { return j < i; }).length;
+          label = '同日・同額・同じ摘要 ' + ordinal + '／' + (1 + r.dup.length) + '件目';
+        }
+        return '<span class="tag' + ((n.kind === 'dup' || n.kind === 'parse') ? ' warn' : '') + '">' + esc(label) + '</span>';
+      }).join('') + '</div></div>' +
       rowNotesHtml(row) + '<div class="rv-why"><h3>なぜ「' + TG.CAT[r.cat].label + '」？</h3><p>' + esc(r.long) + '</p></div>' +
       ((!purchase || recall.length) ? '<details class="rv-evidence"><summary>判定に使った手がかり' + (recall.length ? '・関連する明細' : '') + '</summary>' +
       (purchase ? '' : '<div class="scale"><div class="side facts"><h4>明細とプロフィールの照合</h4>' +
@@ -3818,6 +3845,7 @@ TG.sameShopRows = function (i, forRecall) {
       (splitChoices ? '<h2 style="font-size:16px">混在した支払いの最終区分</h2><p class="hint">CSVの各行は事業か私用に整理します。内訳を手がかりに、ご自身で選んでください。内訳も理由に残ります。</p>' + splitChoices : '') +
       '<label class="ex-opt"><input type="checkbox" id="ex-bom"' + (S.bom ? ' checked' : '') + '><span>Excel で開いても文字化けしない形にする（BOM付きUTF-8）。ほかのアプリで読むときは外せます。</span></label>' +
       '<button type="button" class="btn primary big" data-act="download"' + (ready ? '' : ' disabled') + '>' + IC.dl + 'CSVを保存する</button>' +
+      (lastTransitReview && lastTransitReview.dataset === S.ds.id && S.dec[lastTransitReview.key] ? '<button type="button" class="btn link" data-act="open" data-key="' + lastTransitReview.key + '">最後に確認した明細を見直す（元明細の' + D.rows[D.byKey[lastTransitReview.key]].line + '行目）</button>' : '') +
       (t.finalSplit ? '<p class="hint">内訳を別の列でも保存したい場合：</p><button type="button" class="btn" data-act="download-detail">内訳付きCSV（補助用）</button>' : '') +
       (left ? '<p class="hint" style="font-size:13px;margin:8px 0 0">あと ' + left + '件を確定すると書き出せます。<button type="button" class="btn link" data-go="board">未確認の明細を見る</button></p>' : '') +
       (S.exported ? '<div class="ex-done" role="status">前回書き出したファイル：' + esc(S.exported.name) + '<br>書き出したあとに内容を変えた場合は、もう一度書き出してください。</div>' : '') +
