@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 外部への通信をブラウザの設定で止める（明細もプロフィールも、この端末の外へ出ない）。スクリプトはこのファイルに埋め込んだもの（ハッシュが一致するもの）だけを動かす -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-zoRYNNjmmldJxWOu7z3Mn3DvebDwg4bLv/zqG0QRy6s='; style-src 'unsafe-inline'; img-src data: blob:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-EDvox/fYcUqAp78SGI8nvxc6OqOsXg2Qyr6ICR3HbCA='; style-src 'unsafe-inline'; img-src data: blob:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light">
 <meta name="description" content="副業の内容を手がかりに、カード・銀行の明細を「事業候補・私用候補・要判断」に仕分け、本人が確定してCSVに書き出す整理ツール。データはこの端末の外へ送りません。">
@@ -284,6 +284,16 @@ main { max-width: 1240px; margin: 0 auto; padding: 18px 20px 60px; }
 .checks li span { font-size: 13px; color: var(--ink-2); }
 .ex-box { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; box-shadow: var(--sh); position: sticky; top: 14px; }
 .ex-box .btn.big { width: 100%; }
+.ex-swaps { margin-top: 14px; border-top: 1px solid var(--line-2); padding-top: 10px; overflow-wrap: anywhere; }
+.ex-swaps h2, .swap-preview h3 { margin: 0; font-size: 16px; }
+.ex-swaps p { margin: 6px 0; font-size: 14px; }
+.ex-swaps ul { list-style: none; margin: 0; padding: 0; max-height: 17rem; overflow-y: auto; }
+.ex-swaps li { margin: 6px 0; padding: 10px; border: 1px solid var(--line); border-radius: 8px; }
+.ex-pending { padding: 8px 12px; background: var(--ask-bg); border-left: 3px solid var(--ask-ink); }
+.swap-preview section { padding: 10px 0; border-top: 1px solid var(--line-2); }
+.swap-preview dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 5px 0; }
+.swap-preview dt { color: var(--ink-2); }
+.swap-preview dd { margin: 0; overflow-wrap: anywhere; }
 .ex-sum { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0 0 12px; }
 .ex-sum div { border-radius: 10px; padding: 8px 10px; }
 .ex-sum .b { background: var(--biz-bg); color: var(--biz-ink); }
@@ -3686,6 +3696,65 @@ TG.sameShopRows = function (i, forRecall) {
   }
 
   /* ---------- ④ 書き出し ---------- */
+  function confirmedRideMate(i) {
+    if (i === undefined || !S.exported) return null;
+    var row = D.rows[i], other = matchingRide(i);
+    if (!other) return null;
+    var a = S.dec[row.key], b = S.dec[other.key];
+    return a && b && (a.final !== b.final || a.memo !== b.memo) ? other : null;
+  }
+  function rideEntry(d) {
+    return '<strong>' + decisionLabel(d) + '</strong>　' + esc(d.memo || 'メモなし');
+  }
+  function exportedRidePairs() {
+    if (!S.exported) return '';
+    var pairs = [];
+    D.rows.forEach(function (row,i) {
+      var mate = confirmedRideMate(i);
+      if (!mate || row.line >= mate.line) return;
+      pairs.push('<li><b>' + dateLbl(row) + '　' + amt(row) + '円</b>　' + esc(row.raw.desc) +
+        '<p>元明細' + row.line + '行目　' + rideEntry(S.dec[row.key]) + '<br>元明細' + mate.line + '行目　' + rideEntry(S.dec[mate.key]) + '</p>' +
+        '<button type="button" class="btn sm" data-act="swap-rides" data-key="' + esc(row.key) + '">' + row.line + '・' + mate.line + '行目の取り違えを訂正</button></li>');
+    });
+    return pairs.length ? '<section class="ex-swaps" aria-labelledby="swap-heading"><h2 id="swap-heading">保存後に乗車の取り違えに気づいたら</h2>' +
+      '<p>利用詳細の元行・利用番号と、確定した内容を照合してください。</p><ul>' + pairs.join('') + '</ul></section>' : '';
+  }
+  function swapRides(button) {
+    var key = button.getAttribute('data-key'), i = D.byKey[key], other = confirmedRideMate(i);
+    if (!other) return;
+    var row = D.rows[i], a = S.dec[key], b = S.dec[other.key], dataset = S.ds.id;
+    function change(line, before, after) {
+      return '<section><h3>元明細' + line + '行目</h3><dl><dt>現在</dt><dd>' + rideEntry(before) +
+        '</dd><dt>訂正後</dt><dd>' + rideEntry(after) + '</dd></dl></section>';
+    }
+    var body = '<div class="dlg-b swap-preview"><p>' + dateFull(row) + '　' + amt(row) + '円　' + esc(row.raw.desc) + '</p>' +
+      change(row.line,a,b) + change(other.line,b,a) + '<p>この2件の区分とメモを入れ替えます。次に訂正版のCSVを保存してください。</p></div>';
+    var foot = '<div class="dlg-f"><button type="button" class="btn" data-act="close" data-dlg="dlg-swap">やめる</button><span class="grow"></span>' +
+      '<button type="button" class="btn primary" id="swap-apply">この2件を入れ替える</button></div>';
+    var dlg = openDlg('dlg-swap','乗車2件の訂正内容',body,foot,{raw:true});
+    $('#swap-apply',dlg).addEventListener('click',function () {
+      var saved = TG.storageError ? S : TG.load();
+      if (!saved.ds || saved.ds.id !== dataset || JSON.stringify(saved.dec) !== JSON.stringify(S.dec) ||
+          confirmedRideMate(i) !== other || a !== S.dec[key] || b !== S.dec[other.key]) {
+        dlg.close(); toast('明細が更新されました。ページを開き直して、もう一度照合してください。'); return;
+      }
+      TG.decideRow(key,b.final,b.memo,'review');
+      TG.decideRow(other.key,a.final,a.memo,'review');
+      S.exported.needsReexport = true;
+      retally(); save(true); dlg.close(); render();
+      toast('元明細' + row.line + '・' + other.line + '行目を訂正しました。訂正版CSVを保存してください。');
+      dlg.addEventListener('close',function () { var btn = $('[data-act="download"]'); if (btn) btn.focus(); },{once:true});
+    },{once:true});
+  }
+  function exportRevision() {
+    var previous = S.exported;
+    if (!previous) return 0;
+    return (Number.isSafeInteger(previous.revision) ? previous.revision : 0) + (previous.needsReexport ? 1 : 0);
+  }
+  function exportFilename() {
+    var base = TG.outName(S.ds.name), n = exportRevision();
+    return n ? base.replace(/\.csv$/, '_訂正' + n + '.csv') : base;
+  }
   function viewExport() {
     var t = D.tally, left = t.all - t.done;
     var csv = TG.buildCsv(D.rows, D.res, S.dec, { bom: S.bom });
@@ -3710,21 +3779,24 @@ TG.sameShopRows = function (i, forRecall) {
     var table = outputTable.slice(0, 13);
     var pv = '<div class="tbl-wrap"><table class="pv"><thead><tr>' + table[0].map(function (h) { return '<th>' + esc(h) + '</th>'; }).join('') + '</tr></thead><tbody>' + table.slice(1).map(function (r) { return '<tr>' + r.map(function (c, j) { return '<td class="' + ['d', 'n', 'r', 'c', 'c', 'why'][j] + '">' + esc(c) + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table></div>';
     var ready = !left && v && v.ok;
-    return '<section class="view" aria-labelledby="h-ex"><h1 id="h-ex">CSVを書き出します</h1><p class="lead">書き出す前に、元の明細との照合をしています。ファイル名：<b>' + esc(TG.outName(S.ds.name)) + '</b></p>' +
+    var pending = S.exported && S.exported.needsReexport;
+    return '<section class="view" aria-labelledby="h-ex"><h1 id="h-ex">CSVを書き出します</h1><p class="lead">書き出す前に、元の明細との照合をしています。ファイル名：<b>' + esc(exportFilename()) + '</b></p>' +
       '<div class="ex-grid"><aside class="ex-box">' + totals +
       '<label class="ex-opt"><input type="checkbox" id="ex-bom"' + (S.bom ? ' checked' : '') + '><span>Excel で開いても文字化けしない形にする（BOM付きUTF-8）。ほかのアプリで読むときは外せます。</span></label>' +
-      '<button type="button" class="btn primary big" data-act="download"' + (ready ? '' : ' disabled') + '>' + IC.dl + 'CSVを保存する</button>' +
+      (pending ? '<p class="ex-pending" role="status">訂正済み・再出力待ち<br>先に保存したCSVは訂正前の内容です。</p>' : '') +
+      '<button type="button" class="btn primary big" data-act="download"' + (ready ? '' : ' disabled') + '>' + IC.dl + (pending ? '訂正版CSVを保存' : 'CSVを保存する') + '</button>' +
       (lastTransitReview && lastTransitReview.dataset === S.ds.id && S.dec[lastTransitReview.key] ? '<button type="button" class="btn link" data-act="open" data-key="' + lastTransitReview.key + '">最後に確認した明細を見直す（元明細の' + D.rows[D.byKey[lastTransitReview.key]].line + '行目）</button>' : '') +
       (left ? '<p class="hint" style="font-size:13px;margin:8px 0 0">あと ' + left + '件を確定すると書き出せます。<button type="button" class="btn link" data-go="board">未確認の明細を見る</button></p>' : '') +
-      (S.exported ? '<div class="ex-done" role="status">前回書き出したファイル：' + esc(S.exported.name) + '<br>書き出したあとに内容を変えた場合は、もう一度書き出してください。</div>' : '') +
-      '<p class="lane-d" style="margin:12px 0 0">' + esc(TG.DISCLAIMER) + '</p></aside>' +
+      (S.exported ? '<div class="ex-done" role="status">' + (pending ? '訂正前に保存したファイル' : S.exported.revision ? '最後に保存した訂正版' : '前回書き出したファイル') +
+        '：' + esc(S.exported.name) + (pending || S.exported.revision ? '' : '<br>書き出したあとに内容を変えた場合は、もう一度書き出してください。') + '</div>' : '') +
+      exportedRidePairs() + '<p class="lane-d" style="margin:12px 0 0">' + esc(TG.DISCLAIMER) + '</p></aside>' +
       '<div class="ex-preview">' + checks + '<h2 style="font-size:15px;margin:16px 0 6px">書き出す内容（先頭12行）</h2>' + pv + '</div></div></section>';
   }
   function download() {
     var csv = TG.buildCsv(D.rows, D.res, S.dec, { bom: S.bom });
     var v = TG.verifyCsv(csv, D.rows, D.res, S.dec);
     if (!v.ok) { toast('照合で問題が見つかったため、書き出しを止めました：' + v.problems[0]); render(); return; }
-    var name = TG.outName(S.ds.name);
+    var name = exportFilename(), revision = exportRevision();
     var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     if (window.navigator && window.navigator.msSaveOrOpenBlob) { window.navigator.msSaveOrOpenBlob(blob, name); }
     else {
@@ -3732,7 +3804,7 @@ TG.sameShopRows = function (i, forRecall) {
       document.body.appendChild(a); a.click();
       setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
     }
-    var record = S.exported = { at: Date.now(), name: name };
+    var record = S.exported = { at: Date.now(), name: name, revision: revision };
     lastExportCsv = csv.replace(/^\uFEFF/, '');
     save(true); render();
     csvDigest(lastExportCsv).then(function (digest) {
@@ -3827,6 +3899,7 @@ TG.sameShopRows = function (i, forRecall) {
       if (heldTransit(key) && !S.dec[key] && D.byKey[key] !== undefined && matchingRide(D.byKey[key])) openReview([key], 'queue', 'one-held');
     },
     'correct-ride': correctRide,
+    'swap-rides': swapRides,
     'rv-decide': function (b) { reviewDecide(b.getAttribute('data-final')); },
     'rv-skip': deferReview,
     'rv-hold-pair': deferRidePair,
