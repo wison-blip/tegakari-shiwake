@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 外部への通信をブラウザの設定で止める（明細もプロフィールも、この端末の外へ出ない）。スクリプトはこのファイルに埋め込んだもの（ハッシュが一致するもの）だけを動かす -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-8hm1ZNWGW2VQ7h96dJjOZvKAa94zmW6+rEGkPxCowzA='; style-src 'unsafe-inline'; img-src data: blob:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-zAf+S5hVQmPpHPJnYOX5ewGvDvo75WLgv377/xKEVPg='; style-src 'unsafe-inline'; img-src data: blob:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light">
 <meta name="description" content="副業の内容を手がかりに、カード・銀行の明細を「事業候補・私用候補・要判断」に仕分け、本人が確定してCSVに書き出す整理ツール。データはこの端末の外へ送りません。">
@@ -297,6 +297,13 @@ main { max-width: 1240px; margin: 0 auto; padding: 18px 20px 60px; }
 .ride-time-field, .swap-number { display: grid; gap: 4px; margin-top: 6px; font-size: 14px; }
 .ref-hit { background: var(--ask-bg); }
 .ref-match { display: inline-block; font-weight: 700; }
+.ex-swaps ul.with-clock { max-height: none; }
+.ex-swaps .saved-caption { margin-bottom: 0; color: var(--ink-2); font-size: 13px; }
+.ride-origin { min-width: 0; border: 0; border-top: 1px solid var(--line); margin: 10px 0 0; padding: 6px 0 0; }
+.ride-origin legend { font-weight: 700; font-size: 14px; padding: 0; }
+.ride-origin > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.origin-feedback:empty { display: none; }
+.swap-origin { padding: 8px; border-left: 3px solid var(--line-2); }
 #ride-ref-count { font-weight: 700; }
 .ex-pending { padding: 8px 12px; background: var(--ask-bg); border-left: 3px solid var(--ask-ink); }
 .swap-preview section { padding: 10px 0; border-top: 1px solid var(--line-2); }
@@ -3742,22 +3749,35 @@ TG.sameShopRows = function (i, forRecall) {
     clock.closest('label').hidden = !fare.value;
     var pattern = rideNumberPattern(query);
     groups.forEach(function (group) {
-      var found = false;
+      var hits = [];
       group.querySelectorAll('.pair-line').forEach(function (line) {
         var memo = S.dec[line.dataset.key].memo;
         var hit = pattern ? pattern.test(TG.norm(memo)) : !!time && memoHasTime(memo,time);
-        line.classList.toggle('ref-hit',hit);
-        $('.ref-match',line).hidden = !hit;
-        if (hit) $('.ref-match',line).textContent = pattern ? '番号一致' : '時刻一致';
-        if (hit) found = true;
+        line.classList.toggle('ref-hit',!!pattern && hit);
+        $('.ref-match',line).hidden = !pattern || !hit;
+        if (hit) hits.push(line.dataset.key);
       });
-      group.hidden = (!!fare.value && group.dataset.fare !== fare.value) || (!!(query || time) && !found);
+      group.hidden = (!!fare.value && group.dataset.fare !== fare.value) || (!!(query || time) && !hits.length);
+      var question = $('.ride-origin',group), ask = !group.hidden && time && hits.length === 1;
+      var open = $('[data-act="swap-rides"]',group);
+      open.hidden = !!ask;
+      if (ask) {
+        if (!question) {
+          var i = D.byKey[open.dataset.key];
+          open.insertAdjacentHTML('beforebegin',originQuestion(D.rows[i],confirmedRideMate(i)));
+          question = $('.ride-origin',group);
+        }
+        question.dataset.savedKey = hits[0];
+        $('legend',question).textContent = '利用詳細では、' + time + 'の乗車は元明細の何行目ですか？';
+        $('.origin-feedback',question).textContent = '';
+      } else if (question) question.remove();
       if (!group.hidden) count++;
     });
+    list.classList.toggle('with-clock',!!time);
     list.scrollTop = 0;
     $('#ride-ref-count',panel).textContent = fare.value ?
       (!count ? 'メモに一致する時刻がありません。時刻を空欄にすると、その日付・金額の組を確認できます。' :
-        count + '組が一致。利用詳細の元行・時刻・用途を照合してください。') :
+        time ? '前回のメモに ' + time + ' がある組：' + count + '組' : count + '組。利用詳細の元行・時刻・用途を照合してください。') :
       !query ? '全' + count + '組' : !count ? '一致する組はありません。番号の表記を確認するか、下の日付・金額で探してください。' :
       count + '組が一致' + (count > 1 ? '。日付と元行を利用詳細で確認してください。' : '。元行を利用詳細で確認してください。');
     $('[data-act="clear-ride-ref"]',panel).hidden = !ref.value;
@@ -3765,6 +3785,25 @@ TG.sameShopRows = function (i, forRecall) {
   function pairLine(row) {
     return '<span class="pair-line" data-key="' + esc(row.key) + '">元明細' + row.line + '行目　' +
       rideEntry(S.dec[row.key]) + ' <small class="ref-match" hidden>番号一致</small></span>';
+  }
+  function originQuestion(row,mate) {
+    function choice(r) {
+      return '<button type="button" class="btn sm" data-act="ride-origin" data-key="' + esc(r.key) + '">元明細' + r.line + '行目</button>';
+    }
+    return '<fieldset class="ride-origin"><legend></legend><div>' + choice(row) + choice(mate) +
+      '<button type="button" class="btn sm" data-act="ride-origin">資料で特定できない</button></div>' +
+      '<p class="origin-feedback" role="status"></p></fieldset>';
+  }
+  function checkRideOrigin(button) {
+    var question = button.closest('fieldset'), key = button.dataset.key, group = question.closest('li');
+    var feedback = $('.origin-feedback',question);
+    if (!key) { feedback.textContent = '保存内容はそのままです。利用詳細で時刻と元の行が分かったら、ここで選べます。'; return; }
+    if (key === question.dataset.savedKey) {
+      feedback.textContent = '選んだ行には、その時刻がすでに記録されています。区分と用途も手元の記録と見比べてください。保存内容はそのままです。';
+      return;
+    }
+    var time = $('#ride-time').value, line = D.rows[D.byKey[key]].line;
+    swapRides($('[data-act="swap-rides"]',group), '利用詳細で選んだ対応：' + time + ' → 元明細' + line + '行目');
   }
   function exportedRidePairs() {
     if (!S.exported) return '';
@@ -3775,7 +3814,7 @@ TG.sameShopRows = function (i, forRecall) {
       var fare = row.date.iso + '|' + row.amount;
       fares.set(fare,row.date.iso + '　' + amt(row) + '円');
       pairs.push('<li data-fare="' + esc(fare) + '"><b>' + dateLbl(row) + '　' + amt(row) + '円</b>　' + esc(row.raw.desc) +
-        '<p>' + pairLine(row) + pairLine(mate) + '</p>' +
+        '<p class="saved-caption">前回保存した区分とメモ</p><p>' + pairLine(row) + pairLine(mate) + '</p>' +
         '<button type="button" class="btn sm" data-act="swap-rides" data-key="' + esc(row.key) + '">' + row.line + '・' + mate.line + '行目の取り違えを訂正</button></li>');
     });
     return pairs.length ? '<section class="ex-swaps" aria-labelledby="swap-heading"><h2 id="swap-heading">保存後に乗車の取り違えに気づいたら</h2>' +
@@ -3787,7 +3826,7 @@ TG.sameShopRows = function (i, forRecall) {
         '<p id="ride-ref-count" role="status">全' + pairs.length + '組</p>' : '<p>利用詳細の元行・利用番号と、確定した内容を照合してください。</p>') +
       '<ul id="ride-pair-list">' + pairs.join('') + '</ul></section>' : '';
   }
-  function swapRides(button) {
+  function swapRides(button,origin) {
     var key = button.getAttribute('data-key'), i = D.byKey[key], other = confirmedRideMate(i);
     if (!other) return;
     var row = D.rows[i], a = S.dec[key], b = S.dec[other.key], dataset = S.ds.id;
@@ -3797,6 +3836,7 @@ TG.sameShopRows = function (i, forRecall) {
         '<label class="swap-number">' + line + '行目に追加する利用番号（任意）<input type="text" maxlength="200" autocomplete="off" spellcheck="false"></label></section>';
     }
     var body = '<div class="dlg-b swap-preview"><p>' + dateFull(row) + '　' + amt(row) + '円　' + esc(row.raw.desc) + '</p>' +
+      (origin ? '<p class="swap-origin"><strong>' + esc(origin) + '</strong></p>' : '') +
       change(row.line,a,b) + change(other.line,b,a) + '<p>この2件の区分とメモを入れ替えます。次に訂正版のCSVを保存してください。</p></div>';
     var foot = '<div class="dlg-f"><button type="button" class="btn" data-act="close" data-dlg="dlg-swap">やめる</button><span class="grow"></span>' +
       '<button type="button" class="btn primary" id="swap-apply">この2件を入れ替える</button></div>';
@@ -3982,7 +4022,8 @@ TG.sameShopRows = function (i, forRecall) {
       if (heldTransit(key) && !S.dec[key] && D.byKey[key] !== undefined && matchingRide(D.byKey[key])) openReview([key], 'queue', 'one-held');
     },
     'correct-ride': correctRide,
-    'swap-rides': swapRides,
+    'swap-rides': function (b) { swapRides(b); },
+    'ride-origin': checkRideOrigin,
     'clear-ride-ref': function () { var input = $('#ride-ref'); input.value = ''; filterRidePairs(input); input.focus(); },
     'rv-decide': function (b) { reviewDecide(b.getAttribute('data-final')); },
     'rv-skip': deferReview,
