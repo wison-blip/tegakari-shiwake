@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 外部への通信をブラウザの設定で止める（明細もプロフィールも、この端末の外へ出ない）。スクリプトはこのファイルに埋め込んだもの（ハッシュが一致するもの）だけを動かす -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-EDvox/fYcUqAp78SGI8nvxc6OqOsXg2Qyr6ICR3HbCA='; style-src 'unsafe-inline'; img-src data: blob:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-76YyoaGYE+S+mfHMtWRhnIZds48QUlEvO+oEwVfAF38='; style-src 'unsafe-inline'; img-src data: blob:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light">
 <meta name="description" content="副業の内容を手がかりに、カード・銀行の明細を「事業候補・私用候補・要判断」に仕分け、本人が確定してCSVに書き出す整理ツール。データはこの端末の外へ送りません。">
@@ -289,6 +289,13 @@ main { max-width: 1240px; margin: 0 auto; padding: 18px 20px 60px; }
 .ex-swaps p { margin: 6px 0; font-size: 14px; }
 .ex-swaps ul { list-style: none; margin: 0; padding: 0; max-height: 17rem; overflow-y: auto; }
 .ex-swaps li { margin: 6px 0; padding: 10px; border: 1px solid var(--line); border-radius: 8px; }
+.pair-line { display: block; }
+.ref-label { display: block; font-size: 14px; font-weight: 700; margin: 8px 0 4px; }
+.ref-search { display: flex; gap: 6px; }
+.ref-search input { min-width: 0; flex: 1; padding: 6px 10px; border: 1px solid var(--line-2); border-radius: 8px; font: inherit; }
+.ref-hit { background: var(--ask-bg); }
+.ref-match { display: inline-block; font-weight: 700; }
+#ride-ref-count { font-weight: 700; }
 .ex-pending { padding: 8px 12px; background: var(--ask-bg); border-left: 3px solid var(--ask-ink); }
 .swap-preview section { padding: 10px 0; border-top: 1px solid var(--line-2); }
 .swap-preview dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 5px 0; }
@@ -2851,6 +2858,10 @@ TG.sameShopRows = function (i, forRecall) {
     if (S.view === 'board' && !S.ds) S.view = 'statement';
     if (S.view === 'export' && !S.ds) S.view = 'statement';
     v.innerHTML = S.view === 'profile' ? viewProfile() : S.view === 'statement' ? viewStatement() : S.view === 'board' ? viewBoard() : viewExport();
+    var search = $('#ride-ref');
+    if (search && rideSearch && rideSearch.dataset === S.ds.id) {
+      search.value = rideSearch.value; filterRidePairs(search);
+    }
     renderFooter();
   }
   function go(view, focusTop) {
@@ -3706,6 +3717,33 @@ TG.sameShopRows = function (i, forRecall) {
   function rideEntry(d) {
     return '<strong>' + decisionLabel(d) + '</strong>　' + esc(d.memo || 'メモなし');
   }
+  var rideSearch = null;
+  function filterRidePairs(input) {
+    var query = TG.norm(input.value), panel = input.closest('.ex-swaps');
+    var list = $('ul',panel), groups = list.querySelectorAll('li'), count = 0;
+    rideSearch = {dataset:S.ds.id, value:input.value};
+    // 英数字と番号内の区切りを一続きに扱う。短い番号が長い番号の一部に当たるのを防ぐ。
+    var pattern = query && new RegExp('(?:^|[^A-Z0-9_./-])' + TG.escRe(query) + '(?![A-Z0-9]|[_./-][A-Z0-9])');
+    groups.forEach(function (group) {
+      var found = false;
+      group.querySelectorAll('.pair-line').forEach(function (line) {
+        var hit = !!pattern && pattern.test(TG.norm(S.dec[line.dataset.key].memo));
+        line.classList.toggle('ref-hit',hit);
+        $('.ref-match',line).hidden = !hit;
+        if (hit) found = true;
+      });
+      group.hidden = !!query && !found;
+      if (!group.hidden) count++;
+    });
+    list.scrollTop = 0;
+    $('#ride-ref-count',panel).textContent = !query ? '全' + count + '組' : !count ? '一致する組はありません。番号の表記と、確定時のメモを確認してください。' :
+      count + '組が一致' + (count > 1 ? '。日付と元行を利用詳細で確認してください。' : '。元行を利用詳細で確認してください。');
+    $('[data-act="clear-ride-ref"]',panel).hidden = !input.value;
+  }
+  function pairLine(row) {
+    return '<span class="pair-line" data-key="' + esc(row.key) + '">元明細' + row.line + '行目　' +
+      rideEntry(S.dec[row.key]) + ' <small class="ref-match" hidden>番号一致</small></span>';
+  }
   function exportedRidePairs() {
     if (!S.exported) return '';
     var pairs = [];
@@ -3713,11 +3751,14 @@ TG.sameShopRows = function (i, forRecall) {
       var mate = confirmedRideMate(i);
       if (!mate || row.line >= mate.line) return;
       pairs.push('<li><b>' + dateLbl(row) + '　' + amt(row) + '円</b>　' + esc(row.raw.desc) +
-        '<p>元明細' + row.line + '行目　' + rideEntry(S.dec[row.key]) + '<br>元明細' + mate.line + '行目　' + rideEntry(S.dec[mate.key]) + '</p>' +
+        '<p>' + pairLine(row) + pairLine(mate) + '</p>' +
         '<button type="button" class="btn sm" data-act="swap-rides" data-key="' + esc(row.key) + '">' + row.line + '・' + mate.line + '行目の取り違えを訂正</button></li>');
     });
     return pairs.length ? '<section class="ex-swaps" aria-labelledby="swap-heading"><h2 id="swap-heading">保存後に乗車の取り違えに気づいたら</h2>' +
-      '<p>利用詳細の元行・利用番号と、確定した内容を照合してください。</p><ul>' + pairs.join('') + '</ul></section>' : '';
+      (pairs.length > 1 ? '<label class="ref-label" for="ride-ref">利用番号で探す</label><div class="ref-search"><input type="search" id="ride-ref" maxlength="200" autocomplete="off" spellcheck="false" aria-describedby="ride-ref-help" aria-controls="ride-pair-list">' +
+        '<button type="button" class="btn sm" data-act="clear-ride-ref" hidden>解除</button></div><p id="ride-ref-help">確定時のメモに書いた利用番号を、省略せず入力してください。</p>' +
+        '<p id="ride-ref-count" role="status">全' + pairs.length + '組</p>' : '<p>利用詳細の元行・利用番号と、確定した内容を照合してください。</p>') +
+      '<ul id="ride-pair-list">' + pairs.join('') + '</ul></section>' : '';
   }
   function swapRides(button) {
     var key = button.getAttribute('data-key'), i = D.byKey[key], other = confirmedRideMate(i);
@@ -3900,6 +3941,7 @@ TG.sameShopRows = function (i, forRecall) {
     },
     'correct-ride': correctRide,
     'swap-rides': swapRides,
+    'clear-ride-ref': function () { var input = $('#ride-ref'); input.value = ''; filterRidePairs(input); input.focus(); },
     'rv-decide': function (b) { reviewDecide(b.getAttribute('data-final')); },
     'rv-skip': deferReview,
     'rv-hold-pair': deferRidePair,
@@ -3946,6 +3988,7 @@ TG.sameShopRows = function (i, forRecall) {
       if (f) f(b, e);
     });
     document.addEventListener('input', function (e) {
+      if (e.target.id === 'ride-ref') { filterRidePairs(e.target); return; }
       if (e.target.matches && e.target.matches('textarea[data-field]')) onProfileInput(e.target);
       else if (e.target.id === 'rv-purchase-item' || (e.target.id === 'rv-memo' && $('#rv-purchase-item'))) {
         if (e.target.id === 'rv-purchase-item') itemHint();
