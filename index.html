@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 外部への通信をブラウザの設定で止める（明細もプロフィールも、この端末の外へ出ない）。スクリプトはこのファイルに埋め込んだもの（ハッシュが一致するもの）だけを動かす -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-k7MLEvn+yE3xkLzQLzxmOsbTrKAl8iZzkA50eZEPYT4='; style-src 'unsafe-inline'; img-src data: blob:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-zoRYNNjmmldJxWOu7z3Mn3DvebDwg4bLv/zqG0QRy6s='; style-src 'unsafe-inline'; img-src data: blob:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light">
 <meta name="description" content="副業の内容を手がかりに、カード・銀行の明細を「事業候補・私用候補・要判断」に仕分け、本人が確定してCSVに書き出す整理ツール。データはこの端末の外へ送りません。">
@@ -174,6 +174,14 @@ main { max-width: 1240px; margin: 0 auto; padding: 18px 20px 60px; }
 .trip-start { padding-bottom: 10px; border-bottom: 1px solid var(--line-2); }
 .trip-work p { margin: 4px 0 12px; font-size: 14px; }
 .trip-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.ride-followup { width: 100%; min-width: 0; }
+.ride-followup > div { margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--line-2); overflow-wrap: anywhere; }
+.ride-followup p { margin: 0 0 8px; }
+.ride-correction dl { margin: 16px 0 0; border-top: 1px solid var(--line-2); }
+.ride-correction dt { margin-top: 12px; font-weight: 700; }
+.ride-correction dd { margin: 4px 0 16px; }
+.ride-correction textarea { display: block; width: 100%; margin-top: 5px; padding: 8px 10px; font: inherit; border: 1px solid var(--line-2); border-radius: 8px; }
+.ride-correction .hint:empty { display: none; }
 .trip-actions + .trip-actions, .trip-pick + .trip-actions { margin-top: 10px; }
 .trip-pick summary { cursor: pointer; font-weight: 600; }
 .trip-actions .btn { min-height: 36px; white-space: normal; }
@@ -3057,6 +3065,43 @@ TG.sameShopRows = function (i, forRecall) {
     });
     return work;
   }
+  function rideCorrectionButton(row) {
+    return '<button type="button" class="btn sm" data-act="correct-ride" data-key="' + esc(row.key) + '">確定した行の取り違えを直す</button>';
+  }
+  function correctRide(button) {
+    var key = button.getAttribute('data-key'), i = D.byKey[key];
+    if (i === undefined || !S.dec[key]) return;
+    var from = D.rows[i], to = matchingRide(i), decision = S.dec[key], dataset = S.ds.id;
+    if (!to || S.dec[to.key] || !heldTransit(to.key)) return;
+    var heldNote = S.ds.transitHeld[to.key];
+    var notes = [decision.memo, heldNote, (S.purchaseDetails[to.key] || {}).memoDraft].filter(function (s, n, list) {
+      return s && list.indexOf(s) === n;
+    }).join(' ／ ');
+    var finalLabel = decisionLabel(decision);
+    var body = '<div class="dlg-b ride-correction"><p>' + dateFull(from) + '　' + amt(from) + '円　' + esc(from.raw.desc) + '</p>' +
+      '<p>利用詳細の元行と利用番号を照合してください。</p><dl><dt>元明細' + from.line + '行目 → 記録待ち</dt>' +
+      '<dd>この行の「' + finalLabel + '」と照合メモを取り消します。</dd><dt>元明細' + to.line + '行目 → ' + finalLabel + 'で確定</dt>' +
+      '<dd><label class="memo"><span>' + to.line + '行目に保存する照合メモ</span><textarea id="ride-correction-memo" rows="2" maxlength="200">' + esc(notes) + '</textarea></label></dd></dl>' +
+      '<p class="hint" role="status" id="ride-correction-status">' + (notes.length > 200 ? '両方のメモを合わせて200文字以内に整えてください。' : '') + '</p></div>';
+    var foot = '<div class="dlg-f"><button type="button" class="btn" data-act="close" data-dlg="dlg-ride-correction">やめる</button><span class="grow"></span>' +
+      '<button type="button" class="btn primary" id="ride-correction-apply">' + to.line + '行目へ移して保存</button></div>';
+    var dlg = openDlg('dlg-ride-correction', '確定した乗車を訂正', body, foot, {raw:true});
+    $('#ride-correction-apply', dlg).addEventListener('click', function () {
+      if (!S.ds || S.ds.id !== dataset || S.dec[key] !== decision || S.dec[to.key] || !heldTransit(to.key) || S.ds.transitHeld[to.key] !== heldNote) {
+        dlg.close(); render(); return;
+      }
+      var memo = $('#ride-correction-memo', dlg);
+      if (memo.value.length > 200) {
+        $('#ride-correction-status', dlg).textContent = 'メモを200文字以内に整えてください。';
+        memo.focus(); return;
+      }
+      if (!TG.decideRow(to.key, decision.final, memo.value, 'review')) return;
+      TG.decideRow(key, null);
+      S.ds.transitHeld[key] = '';
+      retally(); save(true); dlg.close(); render();
+      toast('元明細' + to.line + '行目を' + finalLabel + 'で確定しました。' + from.line + '行目は記録待ちです。');
+    });
+  }
   function transitButton(group, label, primary) {
     return '<button type="button" class="btn sm' + (primary ? ' primary' : '') + '" data-act="transit-queue" data-group="' + group + '">' + label + '</button>';
   }
@@ -3085,15 +3130,19 @@ TG.sameShopRows = function (i, forRecall) {
         var compact = !direct && (pair || solo);
         var rowButtons = specific.map(function (k) {
           var row = D.rows[D.byKey[k]];
-          return '<button type="button" class="btn sm" data-act="resume-ride" data-key="' + esc(k) + '">' +
+          var other = matchingRide(D.byKey[k]), confirmed = S.dec[other.key];
+          var resumeButton = '<button type="button" class="btn sm" data-act="resume-ride" data-key="' + esc(k) + '">' +
             (compact ? '' : dateLbl(row) + ' ' + amt(row) + '円・') + '元明細' + row.line + '行目だけ確認</button>';
+          if (!confirmed) return resumeButton;
+          return '<div class="ride-followup">' + resumeButton + '<div><p><b>元明細' + other.line + '行目の確定内容</b>　' +
+            decisionLabel(confirmed) + (confirmed.memo ? '・' + esc(confirmed.memo) : '（メモなし）') + '</p>' + rideCorrectionButton(other) + '</div></div>';
         }).join('');
         var guidance = '利用番号と元行の対応が分かった行を選んでください。';
         var choices = '<div class="trip-actions">' + rowButtons + '</div>';
         if (compact) {
           var remainingHint = S.dec[mate.key] ? '元明細' + mate.line + '行目は確認済みです。' : '';
           hint = dateLbl(first) + ' ' + amt(first) + '円。' + (pair ? guidance + 'もう1件は記録待ちに残ります。' :
-            remainingHint + first.line + '行目の利用番号が届いたら再開してください。');
+            remainingHint + (remainingHint ? '利用詳細の元行と、下の確定内容を照合してください。' : first.line + '行目の利用番号が届いたら再開してください。'));
           rowChoices = choices;
         } else {
           rowChoices = '<details class="trip-pick"><summary>利用番号が分かった乗車を1件ずつ開く</summary><p>' + guidance + '</p>' + choices + '</details>';
@@ -3777,6 +3826,7 @@ TG.sameShopRows = function (i, forRecall) {
       var key = b.getAttribute('data-key');
       if (heldTransit(key) && !S.dec[key] && D.byKey[key] !== undefined && matchingRide(D.byKey[key])) openReview([key], 'queue', 'one-held');
     },
+    'correct-ride': correctRide,
     'rv-decide': function (b) { reviewDecide(b.getAttribute('data-final')); },
     'rv-skip': deferReview,
     'rv-hold-pair': deferRidePair,
