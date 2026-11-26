@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 外部への通信をブラウザの設定で止める（明細もプロフィールも、この端末の外へ出ない）。スクリプトはこのファイルに埋め込んだもの（ハッシュが一致するもの）だけを動かす -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-Cws6+nq9xGvAXw1wCGgM9AL1ZuOmZ0oPeB1K77oFv94='; style-src 'unsafe-inline'; img-src data: blob:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-k7MLEvn+yE3xkLzQLzxmOsbTrKAl8iZzkA50eZEPYT4='; style-src 'unsafe-inline'; img-src data: blob:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light">
 <meta name="description" content="副業の内容を手がかりに、カード・銀行の明細を「事業候補・私用候補・要判断」に仕分け、本人が確定してCSVに書き出す整理ツール。データはこの端末の外へ送りません。">
@@ -174,6 +174,8 @@ main { max-width: 1240px; margin: 0 auto; padding: 18px 20px 60px; }
 .trip-start { padding-bottom: 10px; border-bottom: 1px solid var(--line-2); }
 .trip-work p { margin: 4px 0 12px; font-size: 14px; }
 .trip-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.trip-actions + .trip-actions, .trip-pick + .trip-actions { margin-top: 10px; }
+.trip-pick summary { cursor: pointer; font-weight: 600; }
 .trip-actions .btn { min-height: 36px; white-space: normal; }
 .next .nx-ic { width: 30px; height: 30px; border-radius: 50%; background: rgba(255, 255, 255, .14); display: grid; place-items: center; flex: none; }
 .next .nx-ic svg { width: 18px; height: 18px; }
@@ -3060,7 +3062,7 @@ TG.sameShopRows = function (i, forRecall) {
   }
   function transitPanel(work) {
     if (!work.open.length) return '';
-    var buttons = [], hint;
+    var buttons = [], hint, rowChoices = '';
     var direct = work.open.length > work.held.length;
     if (work.ready.length) {
       hint = '備考を読んで乗車ごとに用途を選べます。';
@@ -3077,9 +3079,28 @@ TG.sameShopRows = function (i, forRecall) {
       });
       var first = D.rows[D.byKey[work.held[0]]], mate = matchingRide(D.byKey[first.key]);
       var pair = work.held.length === 2 && mate && mate.key === work.held[1];
-      if (pair && !direct) hint = '追加の利用詳細で元行との対応が分かったら、1件ずつ用途を選んでください。';
-      var resume = pair ? dateLbl(first) + ' ' + amt(first) + '円・元明細' + TG.lineList([first.line, mate.line]) + 'を再開' : '記録待ち '+work.held.length+'件を開く';
-      buttons.push(transitButton('held',resume,!buttons.length));
+      var solo = work.held.length === 1 && mate;
+      var specific = work.held.filter(function (k) { return matchingRide(D.byKey[k]); });
+      if (specific.length) {
+        var compact = !direct && (pair || solo);
+        var rowButtons = specific.map(function (k) {
+          var row = D.rows[D.byKey[k]];
+          return '<button type="button" class="btn sm" data-act="resume-ride" data-key="' + esc(k) + '">' +
+            (compact ? '' : dateLbl(row) + ' ' + amt(row) + '円・') + '元明細' + row.line + '行目だけ確認</button>';
+        }).join('');
+        var guidance = '利用番号と元行の対応が分かった行を選んでください。';
+        var choices = '<div class="trip-actions">' + rowButtons + '</div>';
+        if (compact) {
+          var remainingHint = S.dec[mate.key] ? '元明細' + mate.line + '行目は確認済みです。' : '';
+          hint = dateLbl(first) + ' ' + amt(first) + '円。' + (pair ? guidance + 'もう1件は記録待ちに残ります。' :
+            remainingHint + first.line + '行目の利用番号が届いたら再開してください。');
+          rowChoices = choices;
+        } else {
+          rowChoices = '<details class="trip-pick"><summary>利用番号が分かった乗車を1件ずつ開く</summary><p>' + guidance + '</p>' + choices + '</details>';
+        }
+      }
+      var resume = pair ? '2件とも続けて確認' : '記録待ち '+work.held.length+'件を開く';
+      if (!(solo && !direct)) buttons.push(transitButton('held',resume,!buttons.length && !rowChoices));
     }
     var title = work.open.length === work.held.length ? '交通の記録待ち ' + work.held.length + '件' : '交通の利用を確認';
     return '<section class="trip-work" aria-label="交通の確認"><h2>' + title + '</h2>' +
@@ -3087,7 +3108,7 @@ TG.sameShopRows = function (i, forRecall) {
         (work.held.length ? transitButton('remaining', '記録待ち以外の' + (work.open.length - work.held.length) + '件を確認', true) :
           transitButton('open', '元明細順に' + work.open.length + '件を確認', true)) +
         '</div><h3>記録が一部だけある・あとでそろう</h3>' : '') +
-      '<p>' + hint + '</p><div class="trip-actions">' + buttons.join('') + '</div></section>';
+      '<p>' + hint + '</p>' + rowChoices + (buttons.length ? '<div class="trip-actions">' + buttons.join('') + '</div>' : '') + '</section>';
   }
   function openTransitGroup(button) {
     var work = transitWork(), group = button.getAttribute('data-group');
@@ -3243,12 +3264,13 @@ TG.sameShopRows = function (i, forRecall) {
     var inner = $('.dlg-in', dlg);
     if (R.mode === 'queue' && R.pos >= R.queue.length) {
       var t = D.tally, left = R.queue.filter(function (k) { return !S.dec[k]; }).length, bl = t.biz.n - t.biz.done, pl = t.pvt.n - t.pvt.done;
-      if (R.grouped === 'all-records' && t.done === t.all && R.undo.length) {
+      if ((R.grouped === 'all-records' || R.grouped === 'one-held') && t.done === t.all && R.undo.length) {
         lastTransitReview = { dataset: S.ds.id, key: R.queue[R.undo[R.undo.length - 1].pos] };
         TG._afterReview = function () { go('export'); };
         dlg.close();
         return;
       }
+      if (R.grouped === 'one-held') { dlg.close(); return; }
       if (R.grouped && t.ask.n > t.ask.done) {
         var waiting = transitWork().held.length;
         inner.innerHTML = dlgHead('dlg-review', R.grouped === 'other' ? '明細の確認' : '交通の確認') + '<div class="dlg-b"><h3>今回の確認はここまでです</h3><p>確定 ' + t.done + ' / ' + t.all + '件。交通の記録待ちは ' + waiting + '件です。</p></div><div class="dlg-f">' + (R.undo.length ? '<button class="btn" data-act="rv-undo">元に戻す</button>' : '') + '<span class="grow"></span><button class="btn primary" data-act="close" data-dlg="dlg-review">一覧に戻る</button></div>';
@@ -3265,11 +3287,13 @@ TG.sameShopRows = function (i, forRecall) {
     var key = R.queue[R.pos], i = D.byKey[key], row = D.rows[i], r = D.res[i], d = S.dec[key];
     var title = R.mode === 'queue' ? '要判断の確認 <span class="num">' + (R.pos + 1) + ' / ' + R.queue.length + '</span>' : '明細の確認';
     var sourceLine = R.grouped === 'all-records' ? '元明細の' + row.line + '行目' : purchaseDuplicateLine(row, r);
+    if (R.grouped === 'one-held') title = '乗車の照合';
     if (sourceLine) title += ' <small>' + sourceLine + '</small>';
     var meter = R.mode === 'queue' ? '<span class="rv-meter" aria-hidden="true">' + R.queue.map(function (k, p) { return '<i class="' + (p === R.pos ? 'c' : (S.dec[k] ? 'd' : '')) + '"></i>'; }).join('') + '</span>' : catChip(r.cat);
     var item = showsItem(key);
     var offerHold = r.rule === 'transport' && !d;
     var mate = matchingRide(i);
+    var targeted = R.grouped === 'one-held';
     var pairAction = offerHold && mate && !S.dec[mate.key] && (R.mode === 'single' || R.queue.indexOf(mate.key) >= 0);
     var same = r.needsPurchaseDetails ? [] : TG.sameShopRows(i).filter(function (j) { return !S.dec[D.rows[j].key] && !D.res[j].needsPurchaseDetails; });
     var allSame = TG.sameShopRows(i, true);
@@ -3283,6 +3307,7 @@ TG.sameShopRows = function (i, forRecall) {
     var facts = (r.quoted.length && r.rule !== 'purpose-conflict' ? [TG.readFrom(r) + '「' + r.typeLabel + '」と推定'] : []).concat(r.facts || []);
     var inOut = row.dir === 'in' ? ((r.type && r.type.id === 'refund') || r.rule === 'refund' ? '返金' : '入金') : '支払い';
     var bizSub = row.dir === 'in' ? '副業に関係する入金' : '仕事で使った', pvtSub = row.dir === 'in' ? '副業に関係しない' : '仕事ではない';
+    var memoField = '<label class="memo"><span>' + (targeted ? 'この行の照合メモ（任意・CSVに保存）' : 'メモ（任意。CSVの理由に残ります）') + '</span><input type="text" id="rv-memo" maxlength="200" value="' + esc(d ? d.memo : ((S.purchaseDetails[key] || {}).memoDraft || (heldTransit(key) ? S.ds.transitHeld[key] : ''))) + '" placeholder="' + (targeted ? '利用番号・乗車時刻・照合した用途' : row.dir === 'in' ? '入金の心当たりや照合した記録' : '何に使ったか、何を見て確かめたか') + '"></label>';
     var body = '<div class="dlg-b">' +
       '<div class="rv-item"><div class="rv-date">' + dateFull(row) + '</div><div class="rv-desc" tabindex="-1">' + esc(row.raw.desc || '（摘要なし）') + '</div>' + reading +
       '<div class="rv-amt num">' + amt(row) + '円<small>' + inOut + (fmtNote.length ? '（元の表記：' + esc(row.raw.amount) + '）' : '') + '</small></div>' +
@@ -3294,6 +3319,7 @@ TG.sameShopRows = function (i, forRecall) {
         return '<span class="tag' + ((n.kind === 'dup' || n.kind === 'parse') ? ' warn' : '') + '">' + esc(label) + '</span>';
       }).join('') + '</div></div>' +
       rowNotesHtml(row) + '<div class="rv-why"><h3>なぜ「' + TG.CAT[r.cat].label + '」？</h3><p>' + esc(r.long) + '</p></div>' +
+      (targeted && mate && heldTransit(mate.key) ? '<p class="ride-pair">今回は元明細' + row.line + '行目だけを確認します。' + mate.line + '行目は記録待ちに残ります。</p>' : '') +
       (pairAction ? '<div class="ride-pair"><b>どちらの乗車か区別できないとき</b><button type="button" class="btn sm" data-act="rv-hold-pair">元明細' + TG.lineList(r.dupLines) + 'だけ保留する</button></div>' : '') +
       /* 天秤（事業寄り・私用寄りの手がかり）は最初から開いておく */
       '<details class="rv-evidence" open><summary>判定に使った手がかり' + (recall.length ? '・関連する明細' : '') + '</summary>' +
@@ -3301,11 +3327,11 @@ TG.sameShopRows = function (i, forRecall) {
       (facts.length ? '<p class="rv-facts"><b>照合</b>' + facts.map(esc).join('／') + '</p>' : '') +
       '<div class="scale"><div class="side biz"><h4>' + IC.biz + '事業寄りの手がかり</h4>' + list(r.pro) + '</div><div class="side pvt"><h4>' + IC.pvt + '私用寄りの手がかり</h4>' + list(r.con) + '</div></div>' +
       (recall.length ? '<div class="rv-sec"><h3>関連する明細</h3><ul>' + recall.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div>' : '') + '</details>' +
-      '<div class="rv-q">' + (item ? itemField(key) : '') + '<p class="q" id="rv-q">' + (mate ? 'この行に対応する乗車を特定できましたか？　照合できた用途を選んでください。' : esc(r.question)) + '</p>' +
+      '<div class="rv-q">' + (item ? itemField(key) : '') + (targeted ? memoField : '') + '<p class="q" id="rv-q">' + (mate ? 'この行に対応する乗車を特定できましたか？　照合できた用途を選んでください。' : esc(r.question)) + '</p>' +
       '<div class="rv-btns" role="group" aria-labelledby="rv-q"><button type="button" class="btn biz" data-act="rv-decide" data-final="biz" aria-pressed="' + (!!d && d.final === 'biz') + '">事業<small>' + bizSub + (R.mode === 'queue' ? (mate ? '（←・Enter）' : '（←）') : '') + '</small></button>' +
       '<button type="button" class="btn pvt" data-act="rv-decide" data-final="pvt" aria-pressed="' + (!!d && d.final === 'pvt') + '">私用<small>' + pvtSub + (R.mode === 'queue' ? (mate ? '（→・Enter）' : '（→）') : '') + '</small></button></div>' +
       '<div class="rv-opts">' + (offerHold ? '<button type="button" class="btn sm" data-act="rv-skip">記録を見てあとで決める</button>' : '') + (same.length ? '<label class="same"><input type="checkbox" id="rv-same"><span>同じ店のほかの未確認 ' + same.length + '件（' + same.slice(0, 3).map(function (j) { return dateLbl(D.rows[j]) + ' ' + amt(D.rows[j]) + '円'; }).join('、') + (same.length > 3 ? ' など' : '') + '）にも、同じ区分を付ける</span></label>' : '') +
-      '<label class="memo"><span>メモ（任意。CSVの理由に残ります）</span><input type="text" id="rv-memo" maxlength="200" value="' + esc(d ? d.memo : ((S.purchaseDetails[key] || {}).memoDraft || (heldTransit(key) ? S.ds.transitHeld[key] : ''))) + '" placeholder="' + (row.dir === 'in' ? '入金の心当たりや照合した記録' : '何に使ったか、何を見て確かめたか') + '"></label>' +
+      (targeted ? '' : memoField) +
       (row.dir === 'out' ? '<p class="hint rv-mixed">仕事と私用の両方に使った支払いは、その内容もメモに書けます。</p>' : '') +
       (d ? '<p class="hint">現在は「' + decisionLabel(d) + '」で確定しています。' + (item ? '記入やメモを変えたときは、' : 'メモを変えたときは、') + '事業・私用のボタンで保存します。</p>' : '') +
       '</div></div></div>';
@@ -3747,6 +3773,10 @@ TG.sameShopRows = function (i, forRecall) {
       openReview(keys, 'queue');
     },
     'open': function (b) { openReview([b.getAttribute('data-key')], 'single'); },
+    'resume-ride': function (b) {
+      var key = b.getAttribute('data-key');
+      if (heldTransit(key) && !S.dec[key] && D.byKey[key] !== undefined && matchingRide(D.byKey[key])) openReview([key], 'queue', 'one-held');
+    },
     'rv-decide': function (b) { reviewDecide(b.getAttribute('data-final')); },
     'rv-skip': deferReview,
     'rv-hold-pair': deferRidePair,
