@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 外部への通信をブラウザの設定で止める（明細もプロフィールも、この端末の外へ出ない）。スクリプトはこのファイルに埋め込んだもの（ハッシュが一致するもの）だけを動かす -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-tr7NfDQqTbLvMcgZT+OWh6ewnTV48lGamVeWH7QEdgU='; style-src 'unsafe-inline'; img-src data: blob:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-uEDWDhE/ZTLGhTnAZFE25d0PmeVC7g4pkjjGCK2NrM8='; style-src 'unsafe-inline'; img-src data: blob:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light">
 <meta name="description" content="副業の内容を手がかりに、カード・銀行の明細を「事業候補・私用候補・要判断」に仕分け、本人が確定してCSVに書き出す整理ツール。データはこの端末の外へ送りません。">
@@ -468,6 +468,37 @@ dialog.dlg::backdrop { background: rgba(20, 22, 26, .45); }
 .opt-row { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; font-size: 13.5px; margin: 8px 0; }
 .opt-row label { display: inline-flex; gap: 6px; align-items: center; }
 .issue-list { font-size: 13px; color: var(--ink-2); padding-left: 1.2em; margin: 8px 0; }
+
+/* 読み込み画面：読み込めないファイルの案内・サンプル・CSVの取り出し方 */
+.err p { margin: 0; }
+.err .err-next { margin-top: 4px; font-weight: 700; }
+.st-sample { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 14px 0 0; font-size: 14px; color: var(--ink-2); }
+.st-sample .hint { flex-basis: 100%; margin: 0; font-size: 12.5px; color: var(--muted); }
+.howto { margin: 14px 0 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 2px 16px; box-shadow: var(--sh); }
+.howto[open] { padding-bottom: 14px; }
+.howto summary { cursor: pointer; font-weight: 700; padding: 10px 0; }
+.howto-b .ol { margin-top: 2px; }
+.kind-tbl { width: 100%; border-collapse: collapse; font-size: 13px; margin: 8px 0 0; }
+.kind-tbl th, .kind-tbl td { border-top: 1px solid var(--line); padding: 7px 8px; text-align: left; vertical-align: top; }
+.kind-tbl th { white-space: nowrap; color: var(--ink-2); width: 1%; }
+/* 読み取り方：先頭の要約 */
+.imp-sum { background: var(--biz-bg); border: 1px solid var(--biz-line); border-radius: 10px; padding: 10px 14px; margin: 0 0 14px; }
+.imp-sum .imp-h { margin: 0 0 4px; font-weight: 700; color: var(--biz-ink); }
+.imp-sum ul { margin: 0; padding-left: 1.2em; font-size: 14px; }
+.imp-sum li { margin: 2px 0; overflow-wrap: anywhere; }
+.imp-warn { margin: 8px 0 0; padding: 6px 10px; background: var(--ask-bg); border-left: 3px solid var(--ask-ink); color: var(--ask-ink); font-size: 13.5px; }
+.imp-act { margin: 8px 0 0; font-size: 13px; color: var(--ink-2); }
+.map-tbl th small { display: block; font-weight: 400; color: var(--ink-2); font-size: 12px; overflow-wrap: anywhere; }
+.imp-more { margin: 12px 0 0; }
+.imp-more summary { cursor: pointer; font-weight: 700; color: var(--ink-2); padding: 6px 0; }
+.imp-more .kv { margin-top: 6px; }
+/* 書き出し画面：保存先・引き継ぎ */
+.ex-where { font-size: 12.5px; margin: 8px 0 0; color: var(--ink-2); line-height: 1.55; }
+.ex-keep { margin-top: 14px; border-top: 1px solid var(--line-2); padding-top: 10px; }
+.ex-keep h2 { font-size: 14px; margin: 0 0 4px; }
+.ex-keep p { font-size: 12.5px; color: var(--ink-2); margin: 0 0 8px; line-height: 1.6; }
+.intro-keep { margin: 2px 0 0; font-size: 12.5px; color: var(--muted); }
+.intro-keep .btn.link { font-size: 12.5px; }
 
 .rule-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
 .rule-row .rk { font-weight: 700; }
@@ -1129,6 +1160,8 @@ TG.decode = function (buf) {
   if (b.length >= 3 && b[0] === 0xEF && b[1] === 0xBB && b[2] === 0xBF) return { text: new TextDecoder('utf-8').decode(b.subarray(3)), encoding: 'UTF-8（BOM付き）' };
   if (b.length >= 2 && b[0] === 0xFF && b[1] === 0xFE) return { text: new TextDecoder('utf-16le').decode(b.subarray(2)), encoding: 'UTF-16' };
   if (b.length >= 2 && b[0] === 0xFE && b[1] === 0xFF) return { text: new TextDecoder('utf-16be').decode(b.subarray(2)), encoding: 'UTF-16' };
+  var u16 = TG.utf16Guess ? TG.utf16Guess(b) : null;   /* BOMのない UTF-16（25_files.js） */
+  if (u16) return { text: new TextDecoder(u16).decode(b), encoding: 'UTF-16' };
   try { return { text: new TextDecoder('utf-8', { fatal: true }).decode(b), encoding: 'UTF-8' }; } catch (e) { /* 次を試す */ }
   try { return { text: new TextDecoder('shift_jis').decode(b), encoding: 'Shift_JIS' }; } catch (e) { /* 次を試す */ }
   return { text: new TextDecoder('utf-8').decode(b), encoding: 'UTF-8（読めない文字あり）' };
@@ -1240,7 +1273,7 @@ TG.HEADERS = {
   dir: ['入出金区分', '入出金', '入出金種別', '取引区分', '区分', '種別'],
   note: ['備考', 'メモ', '摘要2', '補足', 'NOTE', 'MEMO', '利用者', '支払区分', '支払方法']
 };
-TG.ROLE_LABEL = { date: '日付', desc: '摘要', amount: '金額', out: '出金', in: '入金', balance: '残高', dir: '入出金の区分', note: '備考（手がかりに使う）', ignore: '使わない' };
+TG.ROLE_LABEL = { date: '日付', desc: '摘要（店名・内容）', amount: '金額', out: '出金', in: '入金', balance: '残高', dir: '入出金の区分', note: '備考（手がかりに使う）', ignore: '使わない' };
 
 TG.headerKey = function (s) {
   return TG.norm(s).replace(/\s/g, '').replace(/[(（][^)）]*[)）]/g, '').replace(/[・･]/g, '');
@@ -1543,6 +1576,389 @@ TG.readText = function (rawText, name, encoding, opts) {
   }
   var built = TG.buildRows(table, an, opts || {});
   return { name: name, encoding: dec.encoding, delim: delim, table: table, analysis: an, rows: built.rows, blank: built.blank, summary: built.summary, posIsOut: built.posIsOut };
+};
+
+/* 読み取り方の要約（平易な文の配列）。例：「1列目「利用日」を日付、2列目「利用店名」を摘要（店名・内容）、3列目「利用金額」を金額として読みました。」
+ * opt.excel：Excel のファイルなら列を「A列」の形で書く。opt.includeSummary：集計の行を明細に含めているか */
+TG.describeReading = function (st, opt) {
+  opt = opt || {};
+  var an = st.analysis, r = an.roles, lines = [];
+  var colName = function (j) {
+    var h = an.headerIndex >= 0 ? TG.readable(String((an.header || [])[j] || '')).trim() : '';
+    if (h.length > 16) h = h.slice(0, 15) + '…';
+    return (opt.excel && TG.colLetter ? TG.colLetter(j) + '列' : (j + 1) + '列目') + (h ? '「' + h + '」' : '');
+  };
+  var parts = [];
+  var push = function (j, label) { if (j >= 0) parts.push({ j: j, text: colName(j) + 'を' + label }); };
+  push(r.date, '日付'); push(r.desc, '摘要（店名・内容）');
+  if (an.mode === 'split') { push(r.out, '支払い（出金）'); push(r['in'], '入金'); } else push(r.amount, '金額');
+  push(r.dir, '支払いか入金かの区分');
+  parts.sort(function (a, b) { return a.j - b.j; });
+  lines.push(parts.length ? parts.map(function (p) { return p.text; }).join('、') + 'として読みました。' : '日付・摘要・金額の列を見つけられませんでした。下の「列の役割」で選んでください。');
+  var notes = (r.notes || []).slice().sort(function (a, b) { return a - b; });
+  if (notes.length) lines.push(notes.map(colName).join('、') + 'は、仕分けの手がかりとして読みます。');
+  var start = an.dataStart !== undefined ? an.dataStart : an.headerIndex + 1, n = st.rows.length + (opt.includeSummary ? st.summary.length : 0);
+  lines.push((an.headerIndex >= 0 ? (an.headerIndex + 1) + '行目を見出しとして、' : '見出しの行がないため、中身から列を決めました。') + (start + 1) + '行目から ' + n + '件を明細として読みました。' +
+    (st.summary.length && !opt.includeSummary ? '「合計」などの集計の行（' + st.summary.length + '行）は、明細に含めていません。' : ''));
+  if (an.mode !== 'split' && r.amount >= 0) lines.push(r.dir >= 0 ? '支払いか入金かは、区分の列の書き方で見分けました。' : '金額は、' + (st.posIsOut ? 'プラスを支払い、マイナスを返金・入金' : 'マイナスを支払い、プラスを入金') + 'として読みました。');
+  var noDate = 0, noAmount = 0;
+  st.rows.forEach(function (x) { if (!x.date) noDate++; if (x.amount === null) noAmount++; });
+  if (noDate || noAmount) lines.push([noDate ? '日付を読み取れない行が ' + noDate + '件' : '', noAmount ? '金額を読み取れない行が ' + noAmount + '件' : ''].filter(Boolean).join('、') + 'あります。これらは要判断にします。');
+  return lines;
+};
+
+/* ---- 25_files.js ---- */
+/* =========================================================================
+ * 25_files.js  ファイルの種類の見分けと、Excel（.xlsx）の読み込み
+ *
+ * 明細として読むのは、文字で書かれた表（CSV・TSV・テキスト）と、Excel の .xlsx（.xlsm も同じ形）。
+ * PDF・画像・古い形式の Excel（.xls）・Word などは読み込まずに、CSV の取り出し方を案内する。
+ * 中身を読めない行が大半のファイルと、行が多すぎるファイルも、仕分けの前で止める（画面が固まらないように）。
+ *
+ * .xlsx は ZIP にまとめた XML なので、ブラウザに備わっている展開（DecompressionStream の deflate-raw）で開き、
+ * 最初のシートを CSV の文字列に直してから、CSV と同じ読み込みに渡す。外部の部品は使わない。
+ * 行番号は Excel の行番号と同じにする（空の行も空行として残す）。
+ * ========================================================================= */
+
+TG.MAX_ROWS = 5000;               /* 一度に読み込む明細の上限（1年分の数倍。超えると画面が重くなる） */
+TG.MAX_PART = 40 * 1024 * 1024;   /* 展開した XML 1つの大きさの上限 */
+
+/* 案内の文（どれも「読み込めない理由」と「次にすること」を1つずつ） */
+TG.FILE_MESSAGES = {
+  pdf: 'PDFのファイルは読み込めません。PDFの明細からは、日付・店名・金額の表を取り出せないためです。カード会社・銀行のWebサイトで、明細を「CSV」の形式でダウンロードしてください。',
+  image: '画像（写真・スクリーンショット）からは、明細を読み取れません。カード会社・銀行のWebサイトで、明細を「CSV」の形式でダウンロードしてください。',
+  xls: '古い形式のExcel（.xls）と、パスワードを付けたExcelのファイルは読み込めません。Excelで開いて「名前を付けて保存」から「CSV UTF-8（コンマ区切り）」を選んで保存し、そのファイルを読み込んでください。',
+  xlsb: 'Excelのバイナリ形式（.xlsb）は読み込めません。Excelで開いて「名前を付けて保存」から「Excel ブック（.xlsx）」か「CSV UTF-8（コンマ区切り）」を選んで保存し、そのファイルを読み込んでください。',
+  office: 'Word・PowerPoint などの文書のファイルは読み込めません。明細のCSV（またはExcelの .xlsx）を選んでください。',
+  sheet: 'Numbers・LibreOffice などの表のファイルは、そのままでは読み込めません。表のアプリで開いて「CSV」の形式で書き出し、そのファイルを読み込んでください。',
+  archive: '圧縮ファイル（.zip など）は読み込めません。展開（解凍）して、中のCSVを読み込んでください。',
+  html: 'Webページ（HTML）のファイルは読み込めません。カード会社・銀行のWebサイトで、明細を「CSV」の形式でダウンロードしてください。',
+  binary: 'このファイルは、文字で書かれた表（CSV）ではないため読み込めません。カード会社・銀行のWebサイトからダウンロードした、明細のCSVを選んでください。',
+  nodeflate: 'このブラウザでは、Excelのファイルを開けません。Excelで開いて「CSV UTF-8（コンマ区切り）」の形式で保存してから読み込むか、新しい版のブラウザ（Chrome・Edge・Safari・Firefox）で開いてください。',
+  xlsxbad: 'Excelのファイルを読み取れませんでした。Excelで開いて「名前を付けて保存」から「CSV UTF-8（コンマ区切り）」を選んで保存し、そのファイルを読み込んでください。',
+  big: 'ファイルが大きすぎます（15MBまで）。期間を分けてダウンロードし、1つずつ読み込んでください。'
+};
+TG.fileError = function (code, detail) {
+  var e = new Error((TG.FILE_MESSAGES[code] || TG.FILE_MESSAGES.binary) + (detail ? detail : ''));
+  e.code = code; e.guide = true;
+  return e;
+};
+
+/* ---------- バイト列の小さな道具 ---------- */
+TG._u16 = function (b, p) { return b[p] | (b[p + 1] << 8); };
+TG._u32 = function (b, p) { return (b[p] | (b[p + 1] << 8) | (b[p + 2] << 16) | (b[p + 3] << 24)) >>> 0; };
+TG._ascii = function (b, off, len) { var s = ''; for (var i = off; i < Math.min(b.length, off + len); i++) s += String.fromCharCode(b[i]); return s; };
+
+/* 先頭のバイトで、ファイルの種類を見分ける。'text' | 'zip' | 'ole' | 'pdf' | 'image' | 'archive' | 'binary' */
+TG.sniffFile = function (buf) {
+  var b = new Uint8Array(buf), n = b.length;
+  if (!n) return 'text';
+  var head = TG._ascii(b, 0, 16), pdfAt = TG._ascii(b, 0, 1024).indexOf('%PDF-');
+  /* PDF の目印は先頭1024バイトのどこか（ふつうは先頭）。途中にあるときは、末尾の %%EOF でも確かめる */
+  if (pdfAt === 0 || (pdfAt > 0 && TG._ascii(b, Math.max(0, n - 1024), 1024).indexOf('%%EOF') >= 0)) return 'pdf';
+  if (/^PK(\x03\x04|\x05\x06|\x07\x08)/.test(head)) return 'zip';
+  if (head.slice(0, 8) === '\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1') return 'ole';
+  if (head.slice(0, 4) === '\x89PNG' || head.slice(0, 3) === '\xFF\xD8\xFF' || head.slice(0, 4) === 'GIF8' ||
+    (head.slice(0, 4) === 'RIFF' && head.slice(8, 12) === 'WEBP') || head.slice(0, 4) === 'II*\x00' || head.slice(0, 4) === 'MM\x00*' ||
+    (head.slice(0, 2) === 'BM' && n > 26 && !b[6] && !b[7] && !b[8] && !b[9]) ||
+    (head.slice(4, 8) === 'ftyp' && /^(hei[cxms]|hev[cxms]|mif1|msf1|avif|avis)/.test(head.slice(8, 12)))) return 'image';
+  if (head.slice(0, 2) === '\x1F\x8B' || head.slice(0, 6) === '7z\xBC\xAF\x27\x1C' || head.slice(0, 4) === 'Rar!') return 'archive';
+  /* BOM付きの UTF-16 は文字のファイル。それ以外で NUL や制御文字が多ければ、文字でないファイル */
+  if ((b[0] === 0xFF && b[1] === 0xFE) || (b[0] === 0xFE && b[1] === 0xFF)) return 'text';
+  if (TG.utf16Guess(b)) return 'text';
+  var len = Math.min(n, 65536), odd = 0;
+  for (var i = 0; i < len; i++) { var c = b[i]; if (c < 9 || (c > 13 && c < 32 && c !== 26 && c !== 27)) odd++; }
+  return odd > len * 0.01 ? 'binary' : 'text';
+};
+/* BOMのない UTF-16（英数字の多い表なら、偶数か奇数の位置の半分近くが 0 になる） */
+TG.utf16Guess = function (b) {
+  var len = Math.min(b.length, 4096) & ~1, even = 0, odd = 0;
+  if (len < 8) return null;
+  for (var i = 0; i < len; i += 2) { if (!b[i]) even++; if (!b[i + 1]) odd++; }
+  var half = len / 2;
+  if (odd > half * 0.3 && even < half * 0.02) return 'utf-16le';
+  if (even > half * 0.3 && odd < half * 0.02) return 'utf-16be';
+  return null;
+};
+/* 文字に直したあとで見分けるもの（HTML、読めない文字が多いもの） */
+TG.textKind = function (text) {
+  var head = String(text || '').slice(0, 4000).replace(/^\uFEFF/, '');
+  if (/^\s*(?:<!--[\s\S]*?-->\s*)*(?:<!doctype\s+html|<html[\s>]|<\?xml[^>]*\?>\s*<html[\s>])/i.test(head)) return 'html';
+  var sample = String(text || '').slice(0, 20000), bad = 0;
+  for (var i = 0; i < sample.length; i++) if (sample.charCodeAt(i) === 0xFFFD) bad++;
+  return sample.length && bad > sample.length * 0.05 ? 'binary' : null;
+};
+
+/* ---------- ZIP（中央ディレクトリを読む。ZIP64 と暗号化には対応しない） ---------- */
+TG.zipEntries = function (buf) {
+  var b = new Uint8Array(buf), n = b.length, eocd = -1;
+  for (var i = n - 22; i >= Math.max(0, n - 22 - 65535); i--) {
+    if (b[i] === 0x50 && b[i + 1] === 0x4B && b[i + 2] === 0x05 && b[i + 3] === 0x06) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error('ZIPの目次が見つかりません');
+  var count = TG._u16(b, eocd + 10), p = TG._u32(b, eocd + 16);
+  if (count === 0xFFFF || p === 0xFFFFFFFF) throw new Error('大きなZIP（ZIP64）には対応していません');
+  var list = [], dec = new TextDecoder('utf-8');
+  for (var k = 0; k < count; k++) {
+    if (p + 46 > n || TG._u32(b, p) !== 0x02014b50) throw new Error('ZIPの目次が壊れています');
+    var nl = TG._u16(b, p + 28), xl = TG._u16(b, p + 30), cl = TG._u16(b, p + 32);
+    list.push({ name: dec.decode(b.subarray(p + 46, p + 46 + nl)), flags: TG._u16(b, p + 8), method: TG._u16(b, p + 10), csize: TG._u32(b, p + 20), usize: TG._u32(b, p + 24), off: TG._u32(b, p + 42) });
+    p += 46 + nl + xl + cl;
+  }
+  return list;
+};
+TG.canInflate = function () {
+  try { if (typeof DecompressionStream === 'undefined' || typeof Response === 'undefined') return false; new DecompressionStream('deflate-raw'); return true; } catch (e) { return false; }
+};
+TG.inflateRaw = function (data) {
+  if (!TG.canInflate()) return Promise.reject(TG.fileError('nodeflate'));
+  var ds = new DecompressionStream('deflate-raw'), w = ds.writable.getWriter();
+  w.write(data).catch(function () { /* 壊れたデータは読む側で失敗にする */ });
+  w.close().catch(function () { /* 同上 */ });
+  return new Response(ds.readable).arrayBuffer().then(function (ab) { return new Uint8Array(ab); });
+};
+/* ZIPの中の1つを取り出す（Uint8Array） */
+TG.zipRead = function (buf, e) {
+  var b = new Uint8Array(buf);
+  if (e.flags & 1) return Promise.reject(TG.fileError('xls'));
+  if (e.usize > TG.MAX_PART) return Promise.reject(TG.fileError('big'));
+  if (TG._u32(b, e.off) !== 0x04034b50) return Promise.reject(new Error('ZIPの中身が壊れています'));
+  var start = e.off + 30 + TG._u16(b, e.off + 26) + TG._u16(b, e.off + 28);
+  var data = b.subarray(start, start + e.csize);
+  if (e.method === 0) return Promise.resolve(data);
+  if (e.method === 8) return TG.inflateRaw(data);
+  return Promise.reject(new Error('対応していない圧縮の方式です（' + e.method + '）'));
+};
+/* ZIPの中身から、何のファイルかを見分ける */
+TG.zipKind = function (buf, entries) {
+  var names = entries.map(function (e) { return e.name.toLowerCase().replace(/^\/+/, ''); });
+  var has = function (re) { return names.some(function (x) { return re.test(x); }); };
+  if (has(/^\[content_types\]\.xml$/) && has(/(^|\/)workbook\.xml$/)) return { kind: 'xlsx' };
+  if (has(/(^|\/)workbook\.bin$/)) return { kind: 'xlsb' };
+  if (has(/^word\/document\.xml$/) || has(/^ppt\/presentation\.xml$/)) return { kind: 'office' };
+  if (has(/^mimetype$/) && has(/^content\.xml$/)) {
+    var m = entries[names.indexOf('mimetype')], b = new Uint8Array(buf), mime = '';
+    if (m && m.method === 0) mime = TG._ascii(b, m.off + 30 + TG._u16(b, m.off + 26) + TG._u16(b, m.off + 28), Math.min(m.csize, 100));
+    return { kind: /spreadsheet/.test(mime) ? 'sheet' : 'office' };
+  }
+  if (has(/^index\/.*\.iwa$/) || has(/^index\.zip$/)) return { kind: 'sheet' };
+  var csv = entries.filter(function (e) { return /\.(csv|tsv)$/i.test(e.name); }).map(function (e) { return e.name.split('/').pop(); });
+  return { kind: 'archive', detail: csv.length ? '（中に「' + csv.slice(0, 2).join('」「') + '」' + (csv.length > 2 ? 'など' : '') + 'があります）' : '' };
+};
+
+/* ---------- XML（.xlsx の決まった部分だけを読む） ---------- */
+TG.xmlDecode = function (s) {
+  return String(s || '').replace(/&(#x[0-9a-fA-F]+|#\d+|amp|lt|gt|quot|apos);/g, function (m, e) {
+    if (e.charAt(0) === '#') { var cp = /^#x/i.test(e) ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10); try { return String.fromCodePoint(cp); } catch (x) { return ''; } }
+    return { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" }[e];
+  });
+};
+/* Excel が文字列の中に書く「_x000D_」（改行などの文字コード）を戻す */
+TG.xlsxUnescape = function (s) { return String(s).replace(/_x([0-9A-Fa-f]{4})_/g, function (m, h) { return String.fromCharCode(parseInt(h, 16)); }); };
+TG.xmlAttr = function (attrs, key) {
+  var m = new RegExp('(?:^|\\s)(?:[\\w.-]+:)?' + key + '\\s*=\\s*(?:"([^"]*)"|\'([^\']*)\')').exec(attrs || '');
+  return m ? TG.xmlDecode(m[1] !== undefined ? m[1] : m[2]) : null;
+};
+TG.xmlTags = function (xml, tag) {
+  var re = new RegExp('<(?:[\\w.-]+:)?' + tag + '\\b([^>]*?)(?:\\/>|>([\\s\\S]*?)<\\/(?:[\\w.-]+:)?' + tag + '>)', 'g'), out = [], m;
+  while ((m = re.exec(xml))) out.push({ attrs: m[1], inner: m[2] || '' });
+  return out;
+};
+/* 文字列の項目（ふりがな <rPh> は除いて、<t> をつなぐ） */
+TG.xlsxText = function (inner) {
+  var s = String(inner || '').replace(/<(?:[\w.-]+:)?rPh\b[\s\S]*?<\/(?:[\w.-]+:)?rPh>/g, ''), out = '', re = /<(?:[\w.-]+:)?t\b[^>]*?(?:\/>|>([\s\S]*?)<\/(?:[\w.-]+:)?t>)/g, m;
+  while ((m = re.exec(s))) out += m[1] || '';
+  return TG.xlsxUnescape(TG.xmlDecode(out));
+};
+TG.relsOf = function (xml) {
+  var map = {};
+  TG.xmlTags(xml || '', 'Relationship').forEach(function (r) { map[TG.xmlAttr(r.attrs, 'Id')] = { type: TG.xmlAttr(r.attrs, 'Type') || '', target: TG.xmlAttr(r.attrs, 'Target') || '', external: TG.xmlAttr(r.attrs, 'TargetMode') === 'External' }; });
+  return map;
+};
+TG.zipPath = function (base, target) {
+  if (target.charAt(0) === '/') return target.slice(1);
+  var out = [];
+  (base + target).split('/').forEach(function (p) { if (p === '..') out.pop(); else if (p && p !== '.') out.push(p); });
+  return out.join('/');
+};
+
+/* 表示形式から、日付・時刻のセルかどうかを見分ける */
+TG.XLSX_DATE_IDS = { 14: 1, 15: 1, 16: 1, 17: 1, 22: 1, 27: 1, 28: 1, 29: 1, 30: 1, 31: 1, 34: 1, 35: 1, 36: 1, 50: 1, 51: 1, 52: 1, 53: 1, 54: 1, 57: 1, 58: 1 };
+TG.XLSX_TIME_IDS = { 18: 1, 19: 1, 20: 1, 21: 1, 32: 1, 33: 1, 45: 1, 46: 1, 47: 1, 55: 1, 56: 1 };
+TG.xlsxFmtKind = function (code) {
+  var c = String(code || '').replace(/"[^"]*"/g, '').replace(/\\./g, '').replace(/[_*]./g, '').replace(/\[(?:h+|m+|s+)\]/gi, 'h').replace(/\[[^\]]*\]/g, '').replace(/general/gi, '').replace(/E[+-]/gi, '');
+  if (/[ydeg]/i.test(c) || (/m/i.test(c) && !/[hs]/i.test(c))) return 'date';
+  if (/[hs]/i.test(c)) return 'time';
+  return '';
+};
+TG._pad2 = function (v) { return (v < 10 ? '0' : '') + v; };
+/* Excel の日付の値（1900年1月1日を1とする日数。1904年起点のファイルもある）→「2026/09/01」 */
+TG.xlsxDate = function (serial, date1904) {
+  var days = Math.floor(serial), secs = Math.round((serial - days) * 86400);
+  if (secs >= 86400) { days++; secs = 0; }
+  var base = date1904 ? Date.UTC(1904, 0, 1) : (days >= 60 ? Date.UTC(1899, 11, 30) : Date.UTC(1899, 11, 31));
+  var d = new Date(base + days * 86400000);
+  var s = d.getUTCFullYear() + '/' + TG._pad2(d.getUTCMonth() + 1) + '/' + TG._pad2(d.getUTCDate());
+  return secs ? s + ' ' + TG.xlsxTime(secs / 86400) : s;
+};
+TG.xlsxTime = function (frac) {
+  var secs = Math.round((frac - Math.floor(frac)) * 86400), h = Math.floor(secs / 3600), mi = Math.floor((secs % 3600) / 60), se = secs % 60;
+  return h + ':' + TG._pad2(mi) + (se ? ':' + TG._pad2(se) : '');
+};
+TG.xlsxNumber = function (v) { return Number.isInteger(v) ? String(v) : String(parseFloat(v.toPrecision(15))); };
+TG.colIndex = function (ref) {
+  var m = /^([A-Za-z]+)/.exec(ref || ''); if (!m) return -1;
+  var s = m[1].toUpperCase(), n = 0;
+  for (var i = 0; i < s.length; i++) n = n * 26 + (s.charCodeAt(i) - 64);
+  return n - 1;
+};
+TG.colLetter = function (j) { var s = ''; j++; while (j > 0) { var r = (j - 1) % 26; s = String.fromCharCode(65 + r) + s; j = Math.floor((j - 1) / 26); } return s; };
+
+/* 表（配列の配列）→ CSV の文字列（RFC 4180） */
+TG.tableToCsv = function (rows) {
+  return rows.map(function (r) {
+    return r.map(function (v) { v = v === null || v === undefined ? '' : String(v); return /[",\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }).join(',');
+  }).join('\r\n');
+};
+
+/* シートの XML → 表。数式のセルは保存されている計算結果を使う */
+TG.xlsxSheetTable = function (xml, ctx) {
+  var sd = /<(?:[\w.-]+:)?sheetData\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?sheetData>/.exec(xml);
+  var rows = [], maxRow = 0, rowNo = 0, info = { dates: 0, noValue: 0 };
+  if (!sd) return { rows: rows, info: info };
+  TG.xmlTags(sd[1], 'row').forEach(function (row) {
+    var r = parseInt(TG.xmlAttr(row.attrs, 'r'), 10);
+    rowNo = r > 0 ? r : rowNo + 1;
+    var cells = [], col = -1;
+    TG.xmlTags(row.inner, 'c').forEach(function (c) {
+      var ref = TG.xmlAttr(c.attrs, 'r'), j = ref ? TG.colIndex(ref) : col + 1;
+      col = j;
+      if (j < 0 || j > 255) return;
+      var v = TG.xlsxCell(c.attrs, c.inner, ctx, info);
+      if (v !== '') cells[j] = v;
+    });
+    if (!cells.length) return;
+    for (var k = 0; k < cells.length; k++) if (cells[k] === undefined) cells[k] = '';
+    rows.push({ no: rowNo, cells: cells });
+    if (rowNo > maxRow) maxRow = rowNo;
+  });
+  /* 行番号を Excel にそろえる（空の行は空行として残す）。離れた行に値があるときは詰める */
+  var table = [];
+  if (maxRow <= 20000) { rows.forEach(function (r) { while (table.length < r.no - 1) table.push([]); table.push(r.cells); }); }
+  else { table = rows.map(function (r) { return r.cells; }); info.compact = true; }
+  return { rows: table, info: info };
+};
+TG.xlsxCell = function (attrs, inner, ctx, info) {
+  var t = TG.xmlAttr(attrs, 't') || 'n';
+  if (t === 'inlineStr') { var is = /<(?:[\w.-]+:)?is\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?is>/.exec(inner); return is ? TG.xlsxText(is[1]) : ''; }
+  var vm = /<(?:[\w.-]+:)?v\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?v>/.exec(inner);
+  if (!vm) { if (/<(?:[\w.-]+:)?f\b/.test(inner)) info.noValue++; return ''; }
+  var v = TG.xmlDecode(vm[1]);
+  if (t === 's') { var s = ctx.shared[parseInt(v, 10)]; return s === undefined ? '' : s; }
+  if (t === 'str' || t === 'e') return TG.xlsxUnescape(v);
+  if (t === 'b') return v === '1' ? 'TRUE' : 'FALSE';
+  if (t === 'd') {
+    var m = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/.exec(v);
+    if (!m) return v;
+    info.dates++;
+    return m[1] + '/' + m[2] + '/' + m[3] + (m[4] && (m[4] !== '00' || m[5] !== '00') ? ' ' + (+m[4]) + ':' + m[5] : '');
+  }
+  var num = parseFloat(v);
+  if (!isFinite(num)) return v;
+  var kind = ctx.fmtKind(TG.xmlAttr(attrs, 's'));
+  if (kind === 'date' && num >= 1) { info.dates++; return TG.xlsxDate(num, ctx.date1904); }
+  if (kind === 'time' && num >= 0 && num < 1) return TG.xlsxTime(num);
+  return TG.xlsxNumber(num);
+};
+
+/* .xlsx → { text: CSVの文字列, sheet: シート名, notes: [読み込みの説明] } */
+TG.readXlsx = function (buf, entries) {
+  entries = entries || TG.zipEntries(buf);
+  var byName = {};
+  entries.forEach(function (e) { byName[e.name.toLowerCase().replace(/^\/+/, '')] = e; });
+  var dec = new TextDecoder('utf-8');
+  var part = function (path) { var e = byName[String(path).toLowerCase()]; return e ? TG.zipRead(buf, e).then(function (u) { return dec.decode(u); }) : Promise.resolve(null); };
+  var wbPath = 'xl/workbook.xml', wbDir = 'xl/', ctx = { shared: [], xfs: [], fmts: {}, date1904: false };
+  return part('_rels/.rels').then(function (rootRels) {
+    var rels = TG.relsOf(rootRels);
+    Object.keys(rels).forEach(function (id) { if (/\/officeDocument$/.test(rels[id].type)) wbPath = TG.zipPath('', rels[id].target); });
+    wbDir = wbPath.replace(/[^/]*$/, '');
+    return Promise.all([part(wbPath), part(wbDir + '_rels/' + wbPath.split('/').pop() + '.rels')]);
+  }).then(function (got) {
+    var wb = got[0], rels = TG.relsOf(got[1]);
+    if (!wb) throw new Error('ブックの情報がありません');
+    var pr = TG.xmlTags(wb, 'workbookPr')[0];
+    ctx.date1904 = !!(pr && /^(1|true)$/i.test(TG.xmlAttr(pr.attrs, 'date1904') || ''));
+    var sheets = TG.xmlTags(wb, 'sheet').map(function (s) {
+      var rel = rels[TG.xmlAttr(s.attrs, 'id')] || {};
+      return { name: TG.xmlAttr(s.attrs, 'name') || '', hidden: /hidden/i.test(TG.xmlAttr(s.attrs, 'state') || ''), path: rel.target && !rel.external && /\/worksheet$/.test(rel.type) ? TG.zipPath(wbDir, rel.target) : null };
+    }).filter(function (s) { return s.path && !s.hidden; });
+    var find = function (re) { var id = Object.keys(rels).filter(function (k) { return re.test(rels[k].type); })[0]; return id ? TG.zipPath(wbDir, rels[id].target) : null; };
+    if (!sheets.length) throw new Error('読めるシートがありません');
+    return Promise.all([part(find(/\/sharedStrings$/) || wbDir + 'sharedStrings.xml'), part(find(/\/styles$/) || wbDir + 'styles.xml')]).then(function (p2) {
+      ctx.shared = p2[0] ? TG.xmlTags(p2[0], 'si').map(function (si) { return TG.xlsxText(si.inner); }) : [];
+      if (p2[1]) {
+        TG.xmlTags(p2[1], 'numFmt').forEach(function (f) { ctx.fmts[TG.xmlAttr(f.attrs, 'numFmtId')] = TG.xmlAttr(f.attrs, 'formatCode') || ''; });
+        var cx = /<(?:[\w.-]+:)?cellXfs\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?cellXfs>/.exec(p2[1]);
+        ctx.xfs = cx ? TG.xmlTags(cx[1], 'xf').map(function (x) { return parseInt(TG.xmlAttr(x.attrs, 'numFmtId') || '0', 10); }) : [];
+      }
+      var kinds = {};
+      ctx.fmtKind = function (s) {
+        var id = ctx.xfs[parseInt(s || '0', 10) || 0];
+        if (id === undefined || !id) return '';
+        if (kinds[id] === undefined) kinds[id] = ctx.fmts[id] !== undefined ? TG.xlsxFmtKind(ctx.fmts[id]) : (TG.XLSX_DATE_IDS[id] ? 'date' : TG.XLSX_TIME_IDS[id] ? 'time' : '');
+        return kinds[id];
+      };
+      /* 最初に値のあるシートを読む */
+      var others = [];
+      var tryAt = function (k) {
+        if (k >= sheets.length) return { text: '', sheet: sheets[0].name, notes: [] };
+        return part(sheets[k].path).then(function (xml) {
+          var t = xml ? TG.xlsxSheetTable(xml, ctx) : { rows: [], info: {} };
+          if (!t.rows.length) return tryAt(k + 1);
+          others = sheets.slice(k + 1).map(function (s) { return s.name; });
+          var notes = ['Excelのファイルの、シート「' + sheets[k].name + '」を読みました。行の番号は、Excelの行番号と同じです。'];
+          if (t.info.dates) notes.push('Excelの日付のセル（' + t.info.dates + '個）は、「2026/09/01」の形に直して読みました。書き出すCSVの日付も、この形です。');
+          if (t.info.noValue) notes.push('数式のセルのうち、計算の結果が保存されていない ' + t.info.noValue + '個は空欄として読みました。Excelで開いて保存し直すと、読める場合があります。');
+          if (t.info.compact) notes.push('離れた行に値があるため、空の行を詰めて読みました（行の番号がExcelと合いません）。');
+          if (others.length) notes.push('ほかのシート（「' + others.slice(0, 3).join('」「') + '」' + (others.length > 3 ? 'など' : '') + '）は読んでいません。別のシートの明細は、Excelでそのシートを開いて「CSV UTF-8（コンマ区切り）」で保存してから読み込んでください。');
+          return { text: TG.tableToCsv(t.rows), sheet: sheets[k].name, notes: notes };
+        });
+      };
+      return tryAt(0);
+    });
+  });
+};
+
+/* ファイル（ArrayBuffer）→ { text, encoding, source }。読めない種類は、案内の文を持つエラーにする */
+TG.openFile = function (buf, name) {
+  var kind = TG.sniffFile(buf), ext = (/\.([A-Za-z0-9]+)$/.exec(String(name || '')) || [])[1];
+  ext = ext ? ext.toLowerCase() : '';
+  if (kind === 'zip') {
+    var entries;
+    try { entries = TG.zipEntries(buf); } catch (e) { return Promise.reject(TG.fileError(/^xls/.test(ext) ? 'xlsxbad' : 'archive')); }
+    var zk = TG.zipKind(buf, entries);
+    if (zk.kind !== 'xlsx') return Promise.reject(TG.fileError(zk.kind, zk.detail));
+    return TG.readXlsx(buf, entries).then(function (x) {
+      return { text: x.text, encoding: 'Excel（.xlsx）', source: { kind: 'xlsx', sheet: x.sheet, notes: x.notes } };
+    }, function (e) { throw e && e.guide ? e : TG.fileError('xlsxbad', e && e.message ? '（' + e.message + '）' : ''); });
+  }
+  if (kind === 'ole') return Promise.reject(TG.fileError(/^(doc|dot|ppt|pps|msg)$/.test(ext) ? 'office' : 'xls'));
+  if (kind !== 'text') return Promise.reject(TG.fileError(kind));
+  var dec = TG.decode(buf), tk = TG.textKind(dec.text);
+  if (tk) return Promise.reject(TG.fileError(tk));
+  return Promise.resolve({ text: dec.text, encoding: dec.encoding, source: null });
+};
+
+/* 読み込んだ結果を、仕分けの前に確かめる（止めるときは理由の文を返す） */
+TG.checkStatement = function (st, name) {
+  var n = st.rows.length;
+  if (!n) return '「' + name + '」から明細の行が見つかりませんでした（' + (st.table.length ? st.table.length + '行を読みましたが、日付・摘要・金額のそろった行がありません' : '中身が空です') + '）。明細のCSVかどうか、中身を確かめてください。';
+  var bad = 0;
+  st.rows.forEach(function (r) { if (!r.date && r.amount === null) bad++; });
+  if (bad * 2 > n) return '「' + name + '」は、日付と金額をどちらも読み取れない行が大半です（' + TG.yen(n) + '行のうち' + TG.yen(bad) + '行）。明細のCSVではない可能性が高いため、読み込みを止めました。カード会社・銀行のWebサイトからダウンロードした明細のCSVか、確かめてください。';
+  if (n > TG.MAX_ROWS) return '明細の行が多すぎます（' + TG.yen(n) + '行）。一度に読み込めるのは ' + TG.yen(TG.MAX_ROWS) + '行までです。期間を分けてダウンロードし、1つずつ読み込んでください。';
+  return null;
 };
 
 /* ---- 30_profile.js ---- */
@@ -2668,7 +3084,7 @@ TG.verifyCsv = function (csvText, rows, res, decisions) {
 
 /* 出力ファイル名：元のファイル名_仕分け結果.csv */
 TG.outName = function (name) {
-  var base = String(name || '明細').replace(/\.(csv|txt|tsv)$/i, '');
+  var base = String(name || '明細').replace(/\.(csv|txt|tsv|xlsx|xlsm)$/i, '');
   return base + '_仕分け結果.csv';
 };
 
@@ -3043,11 +3459,12 @@ TG.SAMPLE = {
       '<div class="intro-cta">' + (resume || '<button type="button" class="btn primary big" id="intro-start" data-go="profile">はじめる' + IC.arrowR + '</button>') +
       '<button type="button" class="btn big" data-act="sample">サンプルで試す</button>' + (resume ? '<button type="button" class="btn link" id="intro-start" data-go="profile">プロフィールから見直す</button>' : '') + '</div>' +
       '<p class="hint intro-sample">サンプルは配布の架空データ（ライターのプロフィールと、カード明細40件）です。</p>' +
+      '<p class="hint intro-keep">別のパソコンや去年の続きから始めるときは、<button type="button" class="btn link" data-act="backup-load">引き継ぎファイルを読み込む</button><input type="file" id="backup-file-v" class="sr" accept=".json,application/json" tabindex="-1" aria-hidden="true"></p>' +
       '<p class="intro-safe">' + IC.lock + '<span>明細とプロフィールは、この端末のブラウザの中だけで扱います。外部には送りません。</span></p></div>' +
       (examples ? '<figure class="intro-demo"><figcaption>仕分けの例（サンプルの明細から）</figcaption><ul>' + examples + '</ul><p class="hint">最終区分は「事業」か「私用」。決めるのはあなたです。</p></figure>' : '') + '</div>' +
       '<h2 class="intro-h2">4つの手順で終わります</h2><ol class="intro-steps">' +
       '<li><span class="no">1</span><b>副業のプロフィール</b><span>どんな副業かを一言。書いた言葉を手がかりに、仕事に関係しそうな明細を見つけます（空欄でも進めます）。</span></li>' +
-      '<li><span class="no">2</span><b>明細の読み込み</b><span>カード・銀行のCSVを、そのまま入れます。列の名前や並びが違っても読み取ります。</span></li>' +
+      '<li><span class="no">2</span><b>明細の読み込み</b><span>カード・銀行のCSV（Excelの .xlsx も可）を、そのまま入れます。列の名前や並びが違っても読み取ります。</span></li>' +
       '<li><span class="no">3</span><b>仕分けと確認</b><span>迷う明細（要判断）は1件ずつ、事業候補・私用候補は一覧でまとめて確定します。</span></li>' +
       '<li><span class="no">4</span><b>CSVの書き出し</b><span>元の明細の行ごとに、ツールの仕分け・あなたが確定した区分・理由を付けて保存します。</span></li></ol>' +
       '<div class="intro-out"><span class="intro-out-l">保存するCSVの列</span>' + TG.CSV_HEADER.map(function (h) { return '<span class="col">' + esc(h) + '</span>'; }).join('') + '</div>' +
@@ -3113,15 +3530,32 @@ TG.SAMPLE = {
   }
 
   /* ---------- ② 明細の読み込み ---------- */
+  /* 読み込めるファイル（CSV・TSV・テキストと Excel の .xlsx）。PDF・画像などは選べても、読み込む前に見分けて案内する */
+  var FILE_ACCEPT = '.csv,.tsv,.txt,.xlsx,.xlsm,text/csv,text/plain,text/tab-separated-values,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroEnabled.12';
   function viewStatement() {
-    return '<section class="view" aria-labelledby="h-st"><h1 id="h-st">明細のCSVを読み込みます</h1>' +
-      '<p class="lead">カード明細・銀行明細のCSVを、そのまま入れてください。列の名前や並びが違っても、日付・摘要・金額の列を読み取ります。</p>' +
-      (TG.lastError ? '<p class="err" role="alert">' + esc(TG.lastError) + '</p>' : '') +
-      '<div class="drop" id="drop">' + IC.upload + '<strong>ここにCSVファイルをドロップ</strong><span class="or">または</span>' +
+    var guide = !!TG.lastErrorGuide;
+    return '<section class="view" aria-labelledby="h-st"><h1 id="h-st">明細のファイルを読み込みます</h1>' +
+      '<p class="lead">カード会社・銀行のWebサイトからダウンロードした明細のCSV（Excelの .xlsx も可）を、そのまま入れてください。列の名前や並びが違っても、日付・摘要（店名や内容）・金額の列を読み取ります。</p>' +
+      (TG.lastError ? '<div class="err" role="alert"><p>' + esc(TG.lastError) + '</p>' + (guide ? '<p class="err-next">下の「CSVの取り出し方」も見てください。</p>' : '') + '</div>' : '') +
+      '<div class="drop" id="drop">' + IC.upload + '<strong>ここに明細のファイルをドロップ</strong><span class="or">または</span>' +
       '<button type="button" class="btn primary big" data-act="pick">' + IC.file + 'ファイルを選ぶ</button>' +
-      '<input type="file" id="file" class="sr" accept=".csv,.tsv,.txt,text/csv,text/plain" tabindex="-1" aria-hidden="true"></div>' +
-      '<ul class="fine"><li>ファイルはこの端末のブラウザの中だけで読み込みます。外部には送りません。</li><li>文字コード（UTF-8・Shift_JIS）、区切り（カンマ・タブ）、見出しの行の位置は自動で判断します。読み取り方は、あとから確認・変更できます。</li><li>動作確認には、配布のダミーCSVなど架空のデータを使ってください。</li></ul>' +
+      '<input type="file" id="file" class="sr" accept="' + FILE_ACCEPT + '" tabindex="-1" aria-hidden="true"></div>' +
+      '<div class="st-sample"><span>手元に明細がないときは</span><button type="button" class="btn" data-act="sample">サンプルで試す</button><span class="hint">配布の架空データ（ライターのプロフィールと、カード明細40件）を読み込みます。</span></div>' +
+      '<details class="howto"' + (guide ? ' open' : '') + '><summary>CSVの取り出し方</summary><div class="howto-b">' +
+      '<ol class="ol"><li>カード会社・銀行のWebサイトにログインし、「ご利用明細」「入出金明細」などの画面を開きます。スマホのアプリには、CSVの保存がないことがあります。</li>' +
+      '<li>期間（月）を選んで、「CSV」や「ダウンロード」のボタンで保存します。PDFしか見当たらないときは、同じ画面に「CSV」の選択肢がないか探してください。</li>' +
+      '<li>保存したファイルは、ふつう「ダウンロード」フォルダに入ります（iPhone・iPadは「ファイル」アプリの「ダウンロード」）。この画面の「ファイルを選ぶ」から選びます。</li></ol>' +
+      '<table class="kind-tbl"><tbody><tr><th scope="row">読み込める</th><td>CSV（.csv）、タブ区切り（.tsv・.txt）、Excel（.xlsx）</td></tr>' +
+      '<tr><th scope="row">読み込めない</th><td>PDF、画像（写真・スクリーンショット）、古い形式のExcel（.xls）、パスワード付きのExcel。Excelで開けるものは、「名前を付けて保存」で「CSV UTF-8（コンマ区切り）」を選ぶと読み込めます。</td></tr></tbody></table>' +
+      '<p class="lane-d" style="margin:8px 0 0">「摘要（てきよう）」は、明細の「ご利用店名」「お取引内容」のように、どこで何に使ったかが書かれた欄のことです。</p></div></details>' +
+      '<ul class="fine"><li>ファイルはこの端末のブラウザの中だけで読み込みます。外部には送りません。</li><li>どの列を日付・店名・金額として読んだかは、読み込んだあとに確かめて直せます。</li></ul>' +
       '<button type="button" class="btn link" data-go="profile">← プロフィールに戻る</button></section>';
+  }
+  function fileFail(text, guide) {
+    TG.lastError = text; TG.lastErrorGuide = !!guide;
+    if (S.view !== 'statement') S.view = 'statement';
+    render();
+    var e = $('#view .err'); if (e) e.scrollIntoView({ block: 'center' });
   }
   var fileRequest = 0;
   var lastExportCsv = null;
@@ -3144,22 +3578,22 @@ TG.SAMPLE = {
   async function handleFile(file, force) {
     if (!file) return;
     var request = ++fileRequest;
-    if (file.size > 15 * 1024 * 1024) { TG.lastError = 'ファイルが大きすぎます（15MBまで）。'; render(); return; }
+    if (file.size > 15 * 1024 * 1024) { fileFail(TG.FILE_MESSAGES.big, true); return; }
     try {
       var buf = await (file.arrayBuffer ? file.arrayBuffer() : new Promise(function (ok, ng) { var fr = new FileReader(); fr.onload = function () { ok(fr.result); }; fr.onerror = ng; fr.readAsArrayBuffer(file); }));
       if (request !== fileRequest) return;
-      var dec = TG.decode(buf);
+      /* ファイルの種類を見分ける（PDF・画像などは、ここで案内を出して止める）。Excel は CSV の文字列に直す */
+      var dec = await TG.openFile(buf, file.name);
+      if (request !== fileRequest) return;
       var st = TG.readText(dec.text, file.name, dec.encoding, {});
-      if (!st.rows.length) {
-        TG.lastError = '「' + file.name + '」から明細の行が見つかりませんでした（' + (st.table.length ? st.table.length + '行を読みましたが、日付・摘要・金額のそろった行がありません' : '中身が空です') + '）。CSVかどうか、中身を確かめてください。';
-        if (S.view !== 'statement') S.view = 'statement';
-        render(); return;
-      }
+      /* 明細の行がない・日付と金額を読めない行が大半・行が多すぎるときは、仕分けの前で止める */
+      var stop = TG.checkStatement(st, file.name);
+      if (stop) { fileFail(stop, true); return; }
       function replace() {
         if (request !== fileRequest) return;
         lastExportCsv = null;
-        TG.lastError = null;
-        S.ds = { id: 'd' + Date.now().toString(36), name: file.name, encoding: dec.encoding, text: dec.text, opts: {}, includeSummary: false, loadedAt: Date.now() };
+        TG.lastError = null; TG.lastErrorGuide = false;
+        S.ds = { id: 'd' + Date.now().toString(36), name: file.name, encoding: dec.encoding, text: dec.text, source: dec.source || null, opts: {}, includeSummary: false, loadedAt: Date.now() };
         S.dec = {}; S.purchaseDetails = {}; S.skipTopics = {}; S.exported = null; S.lane = 'ask';
         TG.hl = null;
         TG.recompute(); D = TG.D;
@@ -3167,7 +3601,7 @@ TG.SAMPLE = {
         save(true); render();
         window.scrollTo(0, 0);
         var ruled = D.res.filter(function (r) { return r.rule === 'rule'; }).length;
-        toast(D.rows.length + '件を読み込み、仕分けました。' + (ruled ? '覚えた店から ' + ruled + '件を候補にしています。' : ''));
+        toast((S.ds.source && S.ds.source.sheet ? 'Excelのシート「' + S.ds.source.sheet + '」から、' : '') + D.rows.length + '件を読み込み、仕分けました。' + (ruled ? '覚えた店から ' + ruled + '件を候補にしています。' : ''));
         if (D.st.analysis.confidence !== 'high' || D.st.analysis.signNeedsReview) openImport(true);
         else { var h = $('#view h1'); if (h) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); } }
       }
@@ -3177,7 +3611,7 @@ TG.SAMPLE = {
       if (request !== fileRequest) return;
       confirmDlg('別の明細を読み込みますか？', '今の明細（' + esc(S.ds.name) + '）は ' + t.done + '/' + t.all + '件を確定しています。続けると、この明細の確定区分・記録待ち・メモ・購入品の記入をこの画面から取り出せなくなります。', '読み込む', replace);
     } catch (e) {
-      if (request === fileRequest) { TG.lastError = '読み込めませんでした：' + (e && e.message ? e.message : e); render(); }
+      if (request === fileRequest) fileFail(e && e.guide ? e.message : '「' + file.name + '」を読み込めませんでした（' + (e && e.message ? e.message : e) + '）。明細のCSVかどうか、確かめてください。', true);
     }
   }
 
@@ -3724,7 +4158,7 @@ TG.SAMPLE = {
 
   /* ---------- 読み取り方（列の対応・符号・集計行） ---------- */
   function openImport(auto) {
-    var st = D.st, an = st.analysis, roles = an.roles;
+    var st = D.st, an = st.analysis, roles = an.roles, src = S.ds.source || null, excel = !!(src && src.kind === 'xlsx');
     var width = an.width || 0, data = st.table.slice(an.dataStart !== undefined ? an.dataStart : an.headerIndex + 1).filter(function (r) { return r.join('').trim() !== ''; });
     var roleOf = function (j) {
       if (roles.date === j) return 'date'; if (roles.desc === j) return 'desc'; if (roles.amount === j) return 'amount';
@@ -3735,24 +4169,31 @@ TG.SAMPLE = {
     var rowsHtml = '';
     for (var j = 0; j < width; j++) {
       var samples = data.slice(0, 3).map(function (r) { return r[j] || ''; }).filter(function (v) { return v; });
-      rowsHtml += '<tr><th scope="row">' + (an.headerIndex >= 0 ? esc(an.header[j] || '（空欄）') : '列' + (j + 1)) + '</th><td><select data-col="' + j + '" aria-label="列' + (j + 1) + 'の役割">' + opts.map(function (o) { return '<option value="' + o + '"' + (roleOf(j) === o ? ' selected' : '') + '>' + TG.ROLE_LABEL[o] + '</option>'; }).join('') + '</select></td><td class="smp">' + samples.map(esc).join(' ／ ') + '</td></tr>';
+      var colLbl = excel ? TG.colLetter(j) + '列' : (j + 1) + '列目';
+      rowsHtml += '<tr><th scope="row">' + colLbl + (an.headerIndex >= 0 ? '<small>' + esc(an.header[j] || '（空欄）') + '</small>' : '') + '</th><td><select data-col="' + j + '" aria-label="' + colLbl + 'の役割">' + opts.map(function (o) { return '<option value="' + o + '"' + (roleOf(j) === o ? ' selected' : '') + '>' + TG.ROLE_LABEL[o] + '</option>'; }).join('') + '</select></td><td class="smp">' + samples.map(esc).join(' ／ ') + '</td></tr>';
     }
     var prev = D.rows.slice(0, 5).map(function (row) { return '<tr><td>' + esc(row.raw.date) + ' → ' + (row.date ? row.date.iso + '（' + row.date.wd + '）' : '読めません') + '</td><td>' + esc(row.raw.desc) + '</td><td class="r">' + esc(row.raw.amount) + ' → ' + (row.dir === 'in' ? '入金 ' : '支払い ') + amt(row) + '</td></tr>'; }).join('');
     var modeOpt = an.mode === 'split'
       ? '<p class="lane-d" style="margin:8px 0">出金・入金の2列の明細です。CSVの金額には、出金・入金のどちらかに入っている元の値を、そのまま書きます。</p>'
       : '<div class="opt-row"><b>金額の向き：</b><label><input type="radio" name="posout" value="1"' + (D.st.posIsOut ? ' checked' : '') + '>プラスが支払い（マイナスは返金・入金）</label><label><input type="radio" name="posout" value="0"' + (!D.st.posIsOut ? ' checked' : '') + '>マイナスが支払い</label></div>';
-    var issues = an.issues.slice();
+    var issues = (src && src.notes ? src.notes : []).concat(an.issues);
     var notice = [];
-    if (an.confidence !== 'high' && an.confidence !== 'user') notice.push('列の役割を中身から推定しました。日付・摘要・金額の列を確かめてください。');
+    if (an.confidence !== 'high' && an.confidence !== 'user') notice.push('列の役割を中身から推定しました。日付・摘要・金額の列が合っているか確かめてください。');
     if (an.signNeedsReview) notice.push('支払いと入金の符号を決めきれませんでした。元の明細と見比べて、下の「金額の向き」を選んでください。');
-    var body = '<div class="dlg-b">' + (auto && notice.length ? '<p class="err" style="background:var(--ask-bg);border-color:var(--ask-line);color:var(--ask-ink)" role="status">' + notice.join(' ') + '</p>' : '') +
-      '<dl class="kv"><dt>ファイル</dt><dd>' + esc(S.ds.name) + '</dd><dt>文字コード</dt><dd>' + esc(st.encoding) + '</dd><dt>区切り</dt><dd>' + (st.delim === '\t' ? 'タブ' : st.delim === ';' ? 'セミコロン' : 'カンマ') + '</dd><dt>見出しの行</dt><dd>' + (an.headerIndex >= 0 ? (an.headerIndex + 1) + '行目' : 'なし（中身から推定）') + '</dd><dt>明細の行</dt><dd>' + D.rows.length + '件' + (st.blank ? '（空行 ' + st.blank + '行は読み飛ばし）' : '') + '</dd></dl>' +
-      '<h3 style="font-size:14px;margin:0 0 6px">列の役割</h3><div class="tbl-wrap" style="max-height:260px"><table class="map-tbl"><thead><tr><th>列</th><th>役割</th><th>中身の例</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div>' +
+    /* 先頭に、平易な要約（何列目を何として読んだか・何件を明細にしたか） */
+    var summary = TG.describeReading(st, { excel: excel, includeSummary: !!S.ds.includeSummary });
+    var body = '<div class="dlg-b"><div class="imp-sum" aria-labelledby="imp-sum-h"><p class="imp-h" id="imp-sum-h">次のように読みました</p><ul>' + summary.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' +
+      (auto && notice.length ? '<p class="imp-warn" role="status">' + esc(notice.join(' ')) + '</p>' : '') +
+      '<p class="imp-act">合っていれば「この読み取り方で仕分ける」を押してください。違うときは、下の「列の役割」で選び直します。</p></div>' +
+      '<h3 style="font-size:14px;margin:0 0 6px">列の役割</h3><p class="lane-d" style="margin:0 0 6px">「摘要」は、店名や内容（どこで何に使ったか）が書かれた列です。</p><div class="tbl-wrap" style="max-height:260px"><table class="map-tbl"><thead><tr><th>列</th><th>役割</th><th>中身の例</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div>' +
       modeOpt +
       (st.summary.length ? '<div class="opt-row"><label><input type="checkbox" id="imp-sum"' + (S.ds.includeSummary ? ' checked' : '') + '>「合計」など、集計の行と判断した ' + st.summary.length + '行も明細として含める</label></div>' : '') +
       (issues.length ? '<ul class="issue-list">' + issues.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : '') +
       '<p class="lane-d" style="margin:8px 0">書き出すCSVには、ここで選んだ列の値を元の表記のまま使います。</p>' +
-      '<h3 style="font-size:14px;margin:10px 0 6px">読み取りの例（先頭5件）</h3><div class="tbl-wrap"><table class="pv"><thead><tr><th>日付</th><th>摘要</th><th>金額</th></tr></thead><tbody>' + prev + '</tbody></table></div></div>';
+      '<h3 style="font-size:14px;margin:10px 0 6px">読み取りの例（先頭5件）</h3><div class="tbl-wrap"><table class="pv"><thead><tr><th>日付</th><th>摘要</th><th>金額</th></tr></thead><tbody>' + prev + '</tbody></table></div>' +
+      '<details class="imp-more"><summary>ファイルの情報</summary><dl class="kv"><dt>ファイル</dt><dd>' + esc(S.ds.name) + '</dd>' +
+      (excel ? '<dt>形式</dt><dd>Excel（シート「' + esc(src.sheet) + '」）</dd>' : '<dt>文字コード</dt><dd>' + esc(st.encoding) + '</dd><dt>区切り</dt><dd>' + (st.delim === '\t' ? 'タブ' : st.delim === ';' ? 'セミコロン' : 'カンマ') + '</dd>') +
+      '<dt>見出しの行</dt><dd>' + (an.headerIndex >= 0 ? (an.headerIndex + 1) + '行目' : 'なし（中身から推定）') + '</dd><dt>明細の行</dt><dd>' + D.rows.length + '件' + (st.blank ? '（空行 ' + st.blank + '行は読み飛ばし）' : '') + '</dd></dl></details></div>';
     var foot = '<div class="dlg-f"><button type="button" class="btn" data-act="close" data-dlg="dlg-import">閉じる</button><span class="grow"></span><button type="button" class="btn primary" data-act="imp-apply">この読み取り方で仕分ける</button></div>';
     openDlg('dlg-import', '明細の読み取り方', body, foot, { raw: true });
   }
@@ -3824,6 +4265,7 @@ TG.SAMPLE = {
       S.answers = d.answers || {};
       save(true); TG.recompute(); D = TG.D;
       var dl = $('#dlg-rules'); if (dl) dl.close();
+      if (S.view === 'intro') S.view = 'profile';
       render(); toast('引き継ぎファイルを読み込みました（プロフィールと、覚えた店 ' + added + '件）。');
     }).catch(function (e) { toast('読み込めませんでした：' + e.message); });
   }
@@ -4067,7 +4509,8 @@ TG.SAMPLE = {
     var checks = '<ul class="checks">' +
       chk(true, '読み込んだ ' + t.all + '行を、すべて書き出します', '元の明細を1行も欠かさず、読み込んだ順に並べます' + excluded + '。') +
       chk(!left, left ? 'あと ' + left + '件が未確認です' : '最終区分は、すべてあなたが確定しました', left ? '未確認の明細を確定すると、書き出せます。' : '事業 ' + t.finalBiz + '件・私用 ' + t.finalPvt + '件。') +
-      chk(!!(v && v.ok), '日付・摘要・金額は、元の表記のまま', v ? (v.ok ? '書き出す内容を読み直して、' + v.rowsOut + '行すべてを1行ずつ照合しました。' : esc(v.problems.slice(0, 3).join(' '))) : 'すべて確定したあとに、書き出す内容を読み直して照合します。') +
+      chk(!!(v && v.ok), '日付・摘要・金額は、元の表記のまま', (v ? (v.ok ? '書き出す内容を読み直して、' + v.rowsOut + '行すべてを1行ずつ照合しました。' : esc(v.problems.slice(0, 3).join(' '))) : 'すべて確定したあとに、書き出す内容を読み直して照合します。') +
+        (S.ds.source && S.ds.source.kind === 'xlsx' ? ' Excelのファイルから読んだ日付は「2026/09/01」の形、金額はセルの数値（桁区切りなし）で書き出します。' : '')) +
       chk(true, '列：' + TG.CSV_HEADER.join('／'), 'ツール仕分けは最初の判定のまま（事業候補 ' + t.biz.n + '件・要判断 ' + t.ask.n + '件・私用候補 ' + t.pvt.n + '件）です。要判断を確定した行と候補から変えた行は、理由の最後に「確定：」を付けます。記入とメモも理由の最後に残します。') + '</ul>';
     var table = outputTable.slice(0, 13);
     var pv = '<div class="tbl-wrap"><table class="pv"><thead><tr>' + table[0].map(function (h) { return '<th>' + esc(h) + '</th>'; }).join('') + '</tr></thead><tbody>' + table.slice(1).map(function (r) { return '<tr>' + r.map(function (c, j) { return '<td class="' + ['d', 'n', 'r', 'c', 'c', 'why'][j] + '">' + esc(c) + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table></div>';
@@ -4078,11 +4521,15 @@ TG.SAMPLE = {
       '<label class="ex-opt"><input type="checkbox" id="ex-bom"' + (S.bom ? ' checked' : '') + '><span>Excel で開いても文字化けしない形にする（BOM付きUTF-8）。ほかのアプリで読むときは外せます。</span></label>' +
       (pending ? '<p class="ex-pending" role="status">訂正済み・再出力待ち<br>先に保存したCSVは訂正前の内容です。</p>' : '') +
       '<button type="button" class="btn primary big" data-act="download"' + (ready ? '' : ' disabled') + '>' + IC.dl + (pending ? '訂正版CSVを保存' : 'CSVを保存する') + '</button>' +
+      '<p class="hint ex-where">保存先は、ふつう「ダウンロード」フォルダです（iPhone・iPadは「ファイル」アプリの「ダウンロード」）。見つからないときは、ブラウザのメニューの「ダウンロード」を開いてください。</p>' +
       (lastTransitReview && lastTransitReview.dataset === S.ds.id && S.dec[lastTransitReview.key] ? '<button type="button" class="btn link" data-act="open" data-key="' + lastTransitReview.key + '">最後に確認した明細を見直す（元明細の' + D.rows[D.byKey[lastTransitReview.key]].line + '行目）</button>' : '') +
       (left ? '<p class="hint" style="font-size:13px;margin:8px 0 0">あと ' + left + '件を確定すると書き出せます。<button type="button" class="btn link" data-go="board">未確認の明細を見る</button></p>' : '') +
       (S.exported ? '<div class="ex-done" role="status">' + (pending ? '訂正前に保存したファイル' : S.exported.revision ? '最後に保存した訂正版' : '前回書き出したファイル') +
         '：' + esc(S.exported.name) + (pending || S.exported.revision ? '' : '<br>書き出したあとに内容を変えた場合は、もう一度書き出してください。') + '</div>' : '') +
-      exportedRidePairs() + '<p class="lane-d" style="margin:12px 0 0">' + esc(TG.DISCLAIMER) + '</p></aside>' +
+      exportedRidePairs() +
+      '<div class="ex-keep"><h2>次の明細や、別のパソコンで続けるとき</h2><p>作業の続き（今の明細の確定・メモ）は、このブラウザにだけ保存されています。プロフィール・追加の質問の答え・覚えた店は、引き継ぎファイルに保存しておくと、来年の明細や別のパソコンでも使えます。</p>' +
+      '<button type="button" class="btn sm" data-act="backup-save">' + IC.dl + '引き継ぎファイルを保存</button></div>' +
+      '<p class="lane-d" style="margin:12px 0 0">' + esc(TG.DISCLAIMER) + '</p></aside>' +
       '<div class="ex-preview">' + checks + '<h2 style="font-size:15px;margin:16px 0 6px">書き出す内容（先頭12行）</h2>' + pv + '</div></div></section>';
   }
   function download() {
@@ -4107,7 +4554,7 @@ TG.SAMPLE = {
         save(true);
       }
     });
-    toast('書き出しました：' + name);
+    toast('書き出しました：' + name + '（ふつうは「ダウンロード」フォルダに入ります）');
   }
 
   /* ---------- 操作 ---------- */
@@ -4235,7 +4682,7 @@ TG.SAMPLE = {
       var d = $('#dlg-review'); if (d) d.close();
     },
     'backup-save': backupSave,
-    'backup-load': function () { var f = $('#backup-file'); if (f) { f.value = ''; f.click(); } }
+    'backup-load': function () { var f = $('dialog[open] #backup-file') || $('#backup-file-v') || $('#backup-file'); if (f) { f.value = ''; f.click(); } }
   };
   ACT['rules'] = openRules;
 
@@ -4281,7 +4728,7 @@ TG.SAMPLE = {
         if (focus) focus.focus();
         say(t.value ? '追加の質問への回答を変更しました。' : '追加の質問への回答を取り消しました。');
       }
-      else if (t.id === 'backup-file') { backupLoad(t.files && t.files[0]); }
+      else if (t.id === 'backup-file' || t.id === 'backup-file-v') { backupLoad(t.files && t.files[0]); }
       else if (t.id === 'ex-bom') { S.bom = t.checked; save(true); }
       else if (t.id === 'use-rules') { var before = snapshot(); S.useRules = t.checked; save(true); TG.recompute(); D = TG.D; if (S.ds) { var m = diffMoved(before); toast(movedText(m)); } render(); }
     });
