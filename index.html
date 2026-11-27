@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 外部への通信をブラウザの設定で止める（明細もプロフィールも、この端末の外へ出ない）。スクリプトはこのファイルに埋め込んだもの（ハッシュが一致するもの）だけを動かす -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-n88OChp2dGqP1oil4Y6zYlF+M6dalhMo+eDdwtZQIXI='; style-src 'unsafe-inline'; img-src data: blob:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-tr7NfDQqTbLvMcgZT+OWh6ewnTV48lGamVeWH7QEdgU='; style-src 'unsafe-inline'; img-src data: blob:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light">
 <meta name="description" content="副業の内容を手がかりに、カード・銀行の明細を「事業候補・私用候補・要判断」に仕分け、本人が確定してCSVに書き出す整理ツール。データはこの端末の外へ送りません。">
@@ -762,6 +762,8 @@ TG.SIGNALS = [
   { id: 'camera', label: 'カメラ・撮影', group: 'tool', kw: ['カメラ', '撮影', 'レンズ'], direct: ['electronics'], related: ['stock_media', 'accessory'], activity: 'camera' },
   { id: 'stationery', label: '文房具・事務用品', group: 'tool', kw: ['文房具', '文具', '事務用品', '名刺', '印刷', [function (s) { return /ノート(?!PC|パソコン|ブック)/.test(s); }]], direct: ['stationery'] },
   { id: 'telecom', label: '通信・回線', group: 'tool', kw: ['通信', '回線', 'WI-FI', 'WIFI', 'ネット環境', 'インターネット', 'スマホ代', '携帯代'], direct: ['telecom', 'internet'] },
+  /* ネット通販は、仕事の物も私物も買う。記載がなければ要判断にし、追加の質問（「ない」なら私用候補）で絞る */
+  { id: 'ec_work', label: 'ネット通販', group: 'tool', kw: ['ネット通販', '通販'], direct: ['ec'] },
   { id: 'learning', label: '講座・セミナー', group: 'tool', kw: ['セミナー', '勉強会', '講座', '研修', 'スクール'], direct: ['education'] },
   { id: 'ads', label: '広告・集客', group: 'tool', kw: ['広告', '集客', 'プロモーション'], direct: ['ads'] },
 
@@ -821,6 +823,7 @@ TG.TOPICS = [
   { id: 'home', signal: 'home_office', types: ['rent', 'electricity', 'internet'], q: '自宅で副業の作業をしますか？', yes: 'する', no: 'しない' },
   { id: 'train', signal: 'train', types: ['transit', 'taxi'], q: '仕事で電車・バス・タクシーに乗ることはありますか？', yes: 'ある', no: 'ない' },
   { id: 'books', signal: 'books', types: ['books', 'ebooks', 'magazine', 'tech_books'], q: '仕事のために、本や雑誌を買うことはありますか？', yes: 'ある', no: 'ない' },
+  { id: 'ec', signal: 'ec_work', types: ['ec'], q: '仕事に使う物を、ネット通販で買うことはありますか？', yes: 'ある', no: 'ない' },
   { id: 'shipping', signal: 'shipping', types: ['postal'], q: '仕事で郵送・発送をすることはありますか？', yes: 'ある', no: 'ない' },
   { id: 'stationery', signal: 'stationery', types: ['stationery'], q: '仕事で文房具・事務用品を使いますか？', yes: '使う', no: '使わない' },
   { id: 'travel', signal: 'travel_work', types: ['travel'], q: '仕事で泊まりがけの移動（出張・遠征）はありますか？', yes: 'ある', no: 'ない' },
@@ -2149,6 +2152,23 @@ TG.ruleMatch = function (r, ctx, pp) {
   return { biz: hits.filter(function (e) { return e.final === 'biz'; }), pvt: hits.filter(function (e) { return e.final === 'pvt'; }), last: hits[0] };
 };
 
+/* どちらにも使う種類（本・通販・家電・通信など）は、同じ店でも、買った物や月によって用途が変わる。
+ * 前の明細での確定（覚えた店）では候補を決めず、前回の確定とメモを天秤の手がかりとして出す。 */
+TG.dualUse = function (r) { var t = r.base || r.type; return !!(t && t.nature === 'dual'); };
+TG.priorLine = function (e) {
+  return '前回の確定：' + (e.file ? TG.reasonExcerpt(e.file) + '・' : '') + TG.reasonExcerpt(e.dateLabel) + '「' + TG.reasonExcerpt(e.desc) + '」→' + TG.CAT[e.final].final + (e.memo ? '（メモ：' + TG.reasonExcerpt(e.memo) + '）' : '');
+};
+TG.applyPrior = function (r) {
+  var p = r.prior;
+  if (p.biz.length) r.pro.push(TG.priorLine(p.biz[0]) + (p.biz.length > 1 ? ' ほか' + (p.biz.length - 1) + '件' : ''));
+  if (p.pvt.length) r.con.push(TG.priorLine(p.pvt[0]) + (p.pvt.length > 1 ? ' ほか' + (p.pvt.length - 1) + '件' : ''));
+  /* 「使わない」と答えた種類でも、前の明細で「事業」と確定した店なら、今回の用途を確かめる */
+  if (r.cat === 'pvt' && p.biz.length) {
+    var e = p.biz[0];
+    TG.set(r, 'ask', 'prior-dual', '前回は「事業」で確定した店。今回の用途を確認', r.long + '前に読み込んだ明細（' + (e.file ? TG.reasonExcerpt(e.file) + '・' : '') + TG.reasonExcerpt(e.dateLabel) + '「' + TG.reasonExcerpt(e.desc) + '」）では、同じ店をあなたが「事業」と確定しています。今回の用途を確認してください。');
+  }
+};
+
 /* 「摘要の「ﾔﾁﾝ」から」のように、摘要（元の表記）のどの言葉から種類を読んだかを書く */
 TG.readFrom = function (r) { return r.quoted && r.quoted.length ? (r.quotedFromNote ? '摘要・備考の' : '摘要の') + r.quoted.map(function (q) { return '「' + TG.reasonExcerpt(q) + '」'; }).join('') + 'から' : '摘要から'; };
 TG.set = function (r, cat, rule, short, long) { r.cat = cat; r.rule = rule; r.short = short; r.long = long; };
@@ -2177,6 +2197,7 @@ TG.decide = function (row, r, pp, ctx, rows, res, second) {
 
   /* 1 自分ルール（返金は、まず同じ明細の中の元の支払いにそろえる） */
   var rm = (isRefund || inMerchant) ? null : TG.ruleMatch(r, ctx, pp);
+  if (rm && TG.dualUse(r)) { r.prior = rm; rm = null; }
   if (rm) {
     var e = rm.last, where = (e.file ? TG.reasonExcerpt(e.file) + '・' : '') + TG.reasonExcerpt(e.dateLabel);
     if (rm.biz.length && rm.pvt.length) {
@@ -2220,12 +2241,14 @@ TG.decide = function (row, r, pp, ctx, rows, res, second) {
       }
       if (isRefund) {
         var rm2 = TG.ruleMatch(r, ctx, pp);
+        if (rm2 && TG.dualUse(r)) { r.prior = rm2; rm2 = null; }
         if (rm2 && !(rm2.biz.length && rm2.pvt.length)) {
           var f2 = rm2.biz.length ? 'biz' : 'pvt';
           TG.set(r, f2, 'rule', '返金：前回「' + TG.CAT[f2].final + '」と確定した店です', '返金・取消のようです。元の支払いはこの明細にありませんが、前に読み込んだ明細で同じ店をあなたが「' + TG.CAT[f2].final + '」と確定しているため、' + TG.CAT[f2].label + 'にしました。');
           return true;
         }
         TG.set(r, 'ask', 'refund-orphan', '返金のようですが、元の支払いが見つかりません', '返金・取消のようですが、元の支払いがこの明細の中に見つかりませんでした。どの支払いの返金かを確認してください。');
+        if (r.prior) TG.applyPrior(r);
         return true;
       }
     }
@@ -2264,11 +2287,13 @@ TG.decide = function (row, r, pp, ctx, rows, res, second) {
     if (sig) { r.linkSig = sig; r.pro.push(TG.P(sig)); }
     return true;
   }
-  if (TG.decideMaterial(row, r, pp)) return true;
+  if (TG.decideMaterial(row, r, pp)) { if (r.prior) TG.applyPrior(r); return true; }
 
-  /* 4 判定表 → 5 摘要の仕事の言葉（区分を「上げる」方向にだけ使い、事業候補を要判断に下げない） */
+  /* 4 判定表 → 5 摘要の仕事の言葉（区分を「上げる」方向にだけ使い、事業候補を要判断に下げない）
+   * → 6 前の明細での確定（どちらにも使う種類だけ。手がかりとして出す） */
   TG.decideTable(row, r, pp, desc);
   TG.applyWorkWord(r, pp);
+  if (r.prior) TG.applyPrior(r);
   return true;
 };
 
@@ -2367,7 +2392,8 @@ TG.decideTable = function (row, r, pp, desc) {
       TG.set(r, 'ask', 'large', '金額が大きいため、念のため確認に回しました', readType + 'プロフィールに関係する記述はありませんが、金額が' + TG.yen(row.amount) + '円と大きく、仕分けを間違えたときの影響が大きいため、確認に回しました。');
       r.facts.push('プロフィールに関係する記述がない', '金額が大きい（' + TG.yen(row.amount) + '円）');
     } else {
-      TG.set(r, 'pvt', 'table', '副業とのつながりは未記載', readType + '仕事にも私用にも使える種類で、プロフィールに関連する記載がないため、私用の候補です。');
+      /* 記載がないことは私用の証拠にしない。どちらにも使う種類は要判断に置き、追加の質問で「使わない」と答えたときだけ私用候補にする */
+      TG.set(r, 'ask', 'table', '仕事にも私用にも使う種類。今回の用途を確認', readType + '仕事にも私用にも使える種類です。プロフィールにこの種類の記載はありませんが、記載がないだけでは私用と決めず、要判断にしました。');
       r.facts.push(TG.NATURE_LABEL.dual + '：' + lbl, 'プロフィールに関係する記述がない');
     }
     return true;
@@ -2380,7 +2406,8 @@ TG.decideTable = function (row, r, pp, desc) {
     TG.set(r, 'pvt', 'table', '生活でよく使う種類です', readType + '生活でよく使う種類で、プロフィールの' + TG.Q(s) + 'とのつながりは弱いため、私用候補にしました。');
     r.con.push(TG.NATURE_LABEL.life + '：' + lbl); r.pro.push('つながりの弱い記述：' + TG.Q(s));
   } else {
-    TG.set(r, 'pvt', 'table', '日常の支払いに多く、副業とのつながりは未記載', readType + '日常の支払いに多い種類で、プロフィールに仕事とのつながりを示す記載はありません。');
+    /* 私用候補にする根拠は「日常の支払いに多い種類」であること（記載がないことではない） */
+    TG.set(r, 'pvt', 'table', '日常の支払いに多く、副業とのつながりは未記載', readType + '日常の支払いに多い種類なので、私用候補にしました。プロフィールに、仕事で使うという記載もありません。');
     r.con.push(TG.NATURE_LABEL.life + '：' + lbl); r.facts.push('プロフィールに関係する記述がない');
   }
   return true;
@@ -2799,16 +2826,17 @@ TG.decideRow = function (key, final, memo, via, item) {
   if (item) decision.purchase = { item: item };
   delete S.purchaseDetails[key];
   if (S.ds && S.ds.transitHeld) delete S.ds.transitHeld[key];
-  TG.ruleUpsert(key, final);
+  TG.ruleUpsert(key, final, decision.memo);
   return true;
 };
-TG.ruleUpsert = function (key, final) {
+/* 覚えた店（自分ルール）：確定した区分とメモを店ごとに残す。メモは、どちらにも使う種類の店で次の明細の手がかりに出す */
+TG.ruleUpsert = function (key, final, memo) {
   var S = TG.S, D = TG.D, i = D.byKey[key];
   if (i === undefined) return;
   var row = D.rows[i], r = D.res[i];
   S.rules = S.rules.filter(function (x) { return !(x.datasetId === S.ds.id && x.key === key); });
   if (r.transport || r.needsPurchaseDetails || r.rule === 'purpose-conflict' || !r.tokens || !r.tokens.length) return;
-  S.rules.push({ datasetId: S.ds.id, key: key, tokens: r.tokens, type: r.base ? r.base.id : (r.type ? r.type.id : ''), final: final, desc: row.raw.desc, dateLabel: row.date ? row.date.label : row.raw.date, file: S.ds.name, at: Date.now() });
+  S.rules.push({ datasetId: S.ds.id, key: key, tokens: r.tokens, type: r.base ? r.base.id : (r.type ? r.type.id : ''), final: final, memo: memo ? String(memo).slice(0, 200) : '', desc: row.raw.desc, dateLabel: row.date ? row.date.label : row.raw.date, file: S.ds.name, at: Date.now() });
   if (S.rules.length > 5000) S.rules = S.rules.slice(-5000);
 };
 TG.ruleRemove = function (key) {
@@ -2894,7 +2922,7 @@ TG.SAMPLE = {
   var LANE_DESC = {
     biz: '仕事とのつながりがある明細。一覧で確かめて確定します。',
     ask: 'どちらとも言えない明細。1件ずつ確かめて確定します。',
-    pvt: '生活でよく使う種類の明細。一覧で確かめて確定します。'
+    pvt: '生活でよく使う種類や、「使わない」と答えた種類。一覧で確かめて確定します。'
   };
 
   /* ---------- 小さな部品 ---------- */
@@ -3594,7 +3622,7 @@ TG.SAMPLE = {
       say('2件の保留を取り消しました'); return;
     }
     u.prev.forEach(function (p) {
-      if (p.d) { S.dec[p.key] = p.d; TG.ruleUpsert(p.key, p.d.final); } else TG.decideRow(p.key, null);
+      if (p.d) { S.dec[p.key] = p.d; TG.ruleUpsert(p.key, p.d.final, p.d.memo); } else TG.decideRow(p.key, null);
       if (p.draft) S.purchaseDetails[p.key] = p.draft; else delete S.purchaseDetails[p.key];
       if (p.held != null) {
         S.ds.transitHeld = S.ds.transitHeld || {};
@@ -3756,14 +3784,14 @@ TG.SAMPLE = {
       '<h3 style="font-size:14px;margin:0">1. 判定表</h3>' +
       '<table class="rule-tbl"><thead><tr><th>明細の種類 ＼ プロフィール</th><th>直接の記述がある</th><th>関係しうる記述がある</th><th>記述がない</th></tr></thead><tbody>' +
       '<tr><th>仕事向け<small>AIツール・校正ツール・素材・サーバー・ドメイン・コワーキング など</small></th><td>' + c('biz') + '</td><td>' + c('ask') + '</td><td>' + c('ask') + '</td></tr>' +
-      '<tr><th>どちらにも使う<small>本・通信・家電・郵送・通販・家賃・電気代 など</small></th><td>' + c('ask') + '</td><td>' + c('ask') + '</td><td>' + c('pvt') + '<small>1万円以上は要判断</small></td></tr>' +
+      '<tr><th>どちらにも使う<small>本・通信・家電・郵送・通販・家賃・電気代 など</small></th><td>' + c('ask') + '</td><td>' + c('ask') + '</td><td>' + c('ask') + '<small>追加の質問で「使わない」と答えると私用候補</small></td></tr>' +
       '<tr><th>電車・バス・タクシー・交通系IC</th><td colspan="3">要判断。乗車・買い物・チャージごとに用途を確認します。</td></tr>' +
       '<tr><th>生活<small>食料品・ドラッグストア・映画・美容・ジム・飲食 など</small></th><td>' + c('ask') + '</td><td>' + c('pvt') + '</td><td>' + c('pvt') + '</td></tr>' +
       '<tr><th>種類が分からない</th><td>' + c('ask') + '</td><td>' + c('ask') + '</td><td>' + c('ask') + '</td></tr></tbody></table>' +
       '<p class="lane-d" style="margin:0 0 10px">例：「文章校正ツール」と書いた人の校正ツールの支払いは事業候補。「参考資料の書籍」と書いた人の書店の支払いは、私用の本もありうるので要判断。</p>' +
       '<h3 style="font-size:14px;margin:0">2. 判定表より先に見ること（上から順に）</h3><ol class="ol">' +
       '<li>日付・金額を読み取れない明細、摘要が空欄の明細は要判断にします。</li>' +
-      '<li>覚えた店（前の明細で確定した店）：交通の明細は1件ずつ確認します。ほかの種類では、前の明細で同じ店を確定していれば、その区分の候補にします。事業と私用の記録が両方ある店は要判断です。</li>' +
+      '<li>覚えた店（前の明細で確定した店）：前の明細で同じ店を確定していれば、その区分の候補にします。事業と私用の記録が両方ある店は要判断です。交通の明細と、本・通販・家電・通信のようにどちらにも使う種類の店では候補にせず、前回の確定とメモを手がかりとして出します。</li>' +
       '<li>返金：返金日までの同じ店・同じ金額の支払いを探します。元の支払いが見つかれば、その候補にそろえます。見つからないときは覚えた店を参照し、手がかりが足りなければ要判断にします。</li>' +
       '<li>入金：プロフィールの受け取り元（「編集部から」「アプリストアから」など）と一致すれば事業候補。利息・給与は私用候補。それ以外は要判断。</li>' +
       '<li>ATMの引き出し・振込・カードの引き落とし：使い道が明細から分からないので要判断。</li>' +
@@ -3803,13 +3831,13 @@ TG.SAMPLE = {
   /* ---------- 覚えた店・データの扱い・貼り付け・確認 ---------- */
   function openRules() {
     var gs = TG.ruleGroups();
-    var body = '<div class="dlg-b"><p class="lead" style="margin-top:0">あなたが確定した区分を、店ごとに覚えています。次に読み込む明細（別のカード、来年の明細）に同じ店が出てくると、その区分を候補にし、理由に「前回、あなたが〜と確定した店です」と出します。確定は毎回あなたが行います。今の明細の中では使いません。</p>' +
+    var body = '<div class="dlg-b"><p class="lead" style="margin-top:0">あなたが確定した区分を、店ごとに覚えています。次に読み込む明細（別のカード、来年の明細）に同じ店が出てくると、その区分を候補にし、理由に「前回、あなたが〜と確定した店です」と出します。本・通販・家電・通信のように、どちらにも使う種類の店では候補にせず、前回の確定とメモを手がかりとして出します。確定は毎回あなたが行います。今の明細の中では使いません。</p>' +
       '<div class="opt-row"><label><input type="checkbox" id="use-rules"' + (S.useRules ? ' checked' : '') + '>覚えた店を、次の明細の候補に使う</label></div>' +
       (gs.length ? gs.map(function (g) {
         var e = g.items[g.items.length - 1];
         return '<div class="rule-row"><div><div class="rk">' + esc(e.desc) + '</div><div class="rs">' + (g.biz ? '事業 ' + g.biz + '件 ' : '') + (g.pvt ? '私用 ' + g.pvt + '件 ' : '') + '・' + Object.keys(g.files).map(esc).join('、') + '</div></div><button type="button" class="btn sm" data-act="rule-del" data-k="' + esc(g.key) + '">削除</button></div>';
       }).join('') : '<p class="clue-empty">まだありません。明細を確定すると、ここに増えます。</p>') + '</div>';
-    body = body.replace(/<\/div>$/, '<h3 style="font-size:14px;margin:16px 0 4px">別のパソコンや来年に引き継ぐ</h3><p class="lane-d" style="margin:0 0 8px">プロフィール・追加の質問の答え・覚えた店を保存します。覚えた店には、記録した行の摘要、日付、元のファイル名、確定区分、確定した時刻が入ります。現在の明細と本人メモは、このブラウザで続きを確認できます。</p>' +
+    body = body.replace(/<\/div>$/, '<h3 style="font-size:14px;margin:16px 0 4px">別のパソコンや来年に引き継ぐ</h3><p class="lane-d" style="margin:0 0 8px">プロフィール・追加の質問の答え・覚えた店を保存します。覚えた店には、記録した行の摘要、日付、元のファイル名、確定区分、メモ、確定した時刻が入ります。現在の明細と本人メモは、このブラウザで続きを確認できます。</p>' +
       '<div class="opt-row"><button type="button" class="btn sm" data-act="backup-save">' + IC.dl + 'ファイルに保存</button><button type="button" class="btn sm" data-act="backup-load">' + IC.upload + 'ファイルから読み込む</button><input type="file" id="backup-file" class="sr" accept=".json,application/json" tabindex="-1" aria-hidden="true"></div></div>');
     var foot = '<div class="dlg-f">' + (gs.length ? '<button type="button" class="btn" data-act="rule-clear">すべて削除</button>' : '') + '<span class="grow"></span><button type="button" class="btn primary" data-act="close" data-dlg="dlg-rules">閉じる</button></div>';
     openDlg('dlg-rules', '覚えた店（' + gs.length + '店）', body, foot, { raw: true });
