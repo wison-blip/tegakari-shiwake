@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 外部への通信をブラウザの設定で止める（明細もプロフィールも、この端末の外へ出ない）。スクリプトはこのファイルに埋め込んだもの（ハッシュが一致するもの）だけを動かす -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-uEDWDhE/ZTLGhTnAZFE25d0PmeVC7g4pkjjGCK2NrM8='; style-src 'unsafe-inline'; img-src data: blob:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-6V28MTSHr+vA23fyQJ94MjTO8G5o0xoCK9OhcQOYtfE='; style-src 'unsafe-inline'; img-src data: blob:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light">
 <meta name="description" content="副業の内容を手がかりに、カード・銀行の明細を「事業候補・私用候補・要判断」に仕分け、本人が確定してCSVに書き出す整理ツール。データはこの端末の外へ送りません。">
@@ -1297,7 +1297,7 @@ TG.headerRoleOf = function (cell) {
 };
 
 /* 見出し行を探し、列の役割を決める */
-TG.analyzeTable = function (rows) {
+TG.analyzeTable = function (rows, source) {
   var issues = [];
   var best = null;
   for (var i = 0; i < Math.min(rows.length, 15); i++) {
@@ -1341,12 +1341,12 @@ TG.analyzeTable = function (rows) {
       });
       if (hasAmountCell || (c0 && TG.parseDate(c0))) { dataStart = k; break; }
     }
-    if (dataStart > 0) issues.push('先頭の' + dataStart + '行は、日付がないため明細の前の説明の行として読み飛ばしました。');
+    if (dataStart > 0) issues.push('先頭の' + (TG.sourceLine(source, dataStart) - 1) + '行は、日付がないため明細の前の説明の行として読み飛ばしました。');
   }
   var hasAmount = roles.amount >= 0 || roles.out >= 0 || roles.in >= 0;
   var confidence = (headerIndex >= 0 && via.date === 'header' && via.desc === 'header' && hasAmount && (via.amount === 'header' || via.out === 'header' || via.in === 'header')) ? 'high' : (roles.date >= 0 && roles.desc >= 0 && hasAmount ? 'medium' : 'low');
   if (headerIndex < 0) issues.push('見出しの行が見つからなかったため、中身から列を推定しました。');
-  if (headerIndex > 0) issues.push('先頭の' + headerIndex + '行は、明細の前の説明の行として読み飛ばしました。');
+  if (headerIndex > 0) issues.push('先頭の' + (TG.sourceLine(source, headerIndex) - 1) + '行は、明細の前の説明の行として読み飛ばしました。');
   return { headerIndex: headerIndex, dataStart: dataStart, header: header0, roles: roles, via: via, confidence: confidence, issues: issues, width: width, mode: (roles.amount >= 0 && roles.out < 0 && roles.in < 0) ? 'single' : ((roles.out >= 0 || roles.in >= 0) ? 'split' : 'single') };
 };
 
@@ -1564,18 +1564,29 @@ TG.readStatement = function (buf, name, opts) {
 };
 
 /* 文字列 → 読み込み結果（保存しておいた明細を読み直すときにも使う） */
-TG.readText = function (rawText, name, encoding, opts) {
+TG.sourceLine = function (source, i) { return source && source.rowNumbers ? source.rowNumbers[i] : i + 1; };
+TG.sourceColumn = function (source, j) { return source && source.columns ? source.columns[j] : j; };
+TG.readText = function (rawText, name, encoding, opts, source) {
   var dec = { encoding: encoding };
   var text = String(rawText || '').replace(/^﻿/, '');
-  var delim = TG.detectDelim(text);
+  var delim = source && source.kind === 'xlsx' ? ',' : TG.detectDelim(text);
   var table = TG.parseCSV(text, delim);
-  var an = TG.analyzeTable(table);
+  var an = TG.analyzeTable(table, source);
   if (opts && opts.roles) {
     an.roles = opts.roles; an.mode = (an.roles.out >= 0 || an.roles['in'] >= 0) && an.roles.amount < 0 ? 'split' : 'single'; an.confidence = 'user';
     if (opts.headerIndex !== undefined) { an.headerIndex = opts.headerIndex; an.dataStart = opts.headerIndex + 1; }
   }
   var built = TG.buildRows(table, an, opts || {});
-  return { name: name, encoding: dec.encoding, delim: delim, table: table, analysis: an, rows: built.rows, blank: built.blank, summary: built.summary, posIsOut: built.posIsOut };
+  if (source && source.rowNumbers) {
+    // 末尾の集計行を表の位置で判別した後に、本人が照合する元の行番号へ戻す。
+    built.rows.concat(built.summary).forEach(function (row) {
+      row.line = TG.sourceLine(source, row.line - 1);
+      row.excelLine = true;
+    });
+    var numbers = source.rowNumbers;
+    if (numbers.length) built.blank += numbers[numbers.length - 1] - numbers.length;
+  }
+  return { name: name, encoding: dec.encoding, delim: delim, source: source, table: table, analysis: an, rows: built.rows, blank: built.blank, summary: built.summary, posIsOut: built.posIsOut };
 };
 
 /* 読み取り方の要約（平易な文の配列）。例：「1列目「利用日」を日付、2列目「利用店名」を摘要（店名・内容）、3列目「利用金額」を金額として読みました。」
@@ -1586,7 +1597,7 @@ TG.describeReading = function (st, opt) {
   var colName = function (j) {
     var h = an.headerIndex >= 0 ? TG.readable(String((an.header || [])[j] || '')).trim() : '';
     if (h.length > 16) h = h.slice(0, 15) + '…';
-    return (opt.excel && TG.colLetter ? TG.colLetter(j) + '列' : (j + 1) + '列目') + (h ? '「' + h + '」' : '');
+    return (opt.excel && TG.colLetter ? TG.colLetter(TG.sourceColumn(st.source, j)) + '列' : (j + 1) + '列目') + (h ? '「' + h + '」' : '');
   };
   var parts = [];
   var push = function (j, label) { if (j >= 0) parts.push({ j: j, text: colName(j) + 'を' + label }); };
@@ -1598,7 +1609,7 @@ TG.describeReading = function (st, opt) {
   var notes = (r.notes || []).slice().sort(function (a, b) { return a - b; });
   if (notes.length) lines.push(notes.map(colName).join('、') + 'は、仕分けの手がかりとして読みます。');
   var start = an.dataStart !== undefined ? an.dataStart : an.headerIndex + 1, n = st.rows.length + (opt.includeSummary ? st.summary.length : 0);
-  lines.push((an.headerIndex >= 0 ? (an.headerIndex + 1) + '行目を見出しとして、' : '見出しの行がないため、中身から列を決めました。') + (start + 1) + '行目から ' + n + '件を明細として読みました。' +
+  lines.push((an.headerIndex >= 0 ? TG.sourceLine(st.source, an.headerIndex) + '行目を見出しとして、' : '見出しの行がないため、中身から列を決めました。') + (TG.sourceLine(st.source, start) || (start + 1)) + '行目から ' + n + '件を明細として読みました。' +
     (st.summary.length && !opt.includeSummary ? '「合計」などの集計の行（' + st.summary.length + '行）は、明細に含めていません。' : ''));
   if (an.mode !== 'split' && r.amount >= 0) lines.push(r.dir >= 0 ? '支払いか入金かは、区分の列の書き方で見分けました。' : '金額は、' + (st.posIsOut ? 'プラスを支払い、マイナスを返金・入金' : 'マイナスを支払い、プラスを入金') + 'として読みました。');
   var noDate = 0, noAmount = 0;
@@ -1617,7 +1628,7 @@ TG.describeReading = function (st, opt) {
  *
  * .xlsx は ZIP にまとめた XML なので、ブラウザに備わっている展開（DecompressionStream の deflate-raw）で開き、
  * 最初のシートを CSV の文字列に直してから、CSV と同じ読み込みに渡す。外部の部品は使わない。
- * 行番号は Excel の行番号と同じにする（空の行も空行として残す）。
+ * 値のある行と列だけを表にし、Excel の座標を保存する。
  * ========================================================================= */
 
 TG.MAX_ROWS = 5000;               /* 一度に読み込む明細の上限（1年分の数倍。超えると画面が重くなる） */
@@ -1824,29 +1835,33 @@ TG.tableToCsv = function (rows) {
 /* シートの XML → 表。数式のセルは保存されている計算結果を使う */
 TG.xlsxSheetTable = function (xml, ctx) {
   var sd = /<(?:[\w.-]+:)?sheetData\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?sheetData>/.exec(xml);
-  var rows = [], maxRow = 0, rowNo = 0, info = { dates: 0, noValue: 0 };
+  var rows = [], rowNumbers = [], used = new Set(), rowNo = 0, info = { dates: 0, noValue: 0 };
   if (!sd) return { rows: rows, info: info };
   TG.xmlTags(sd[1], 'row').forEach(function (row) {
     var r = parseInt(TG.xmlAttr(row.attrs, 'r'), 10);
-    rowNo = r > 0 ? r : rowNo + 1;
+    var nextRow = r > 0 ? r : rowNo + 1;
+    if (nextRow <= rowNo || nextRow > 1048576) throw TG.fileError('xlsxbad', '（行番号を確認してください。）');
+    rowNo = nextRow;
     var cells = [], col = -1;
     TG.xmlTags(row.inner, 'c').forEach(function (c) {
       var ref = TG.xmlAttr(c.attrs, 'r'), j = ref ? TG.colIndex(ref) : col + 1;
       col = j;
-      if (j < 0 || j > 255) return;
+      if (j < 0 || j >= 16384) throw TG.fileError('xlsxbad', '（列の位置を確認してください。）');
       var v = TG.xlsxCell(c.attrs, c.inner, ctx, info);
-      if (v !== '') cells[j] = v;
+      if (v !== '') { cells.push({ column: j, value: v }); used.add(j); }
     });
     if (!cells.length) return;
-    for (var k = 0; k < cells.length; k++) if (cells[k] === undefined) cells[k] = '';
-    rows.push({ no: rowNo, cells: cells });
-    if (rowNo > maxRow) maxRow = rowNo;
+    rows.push(cells);
+    rowNumbers.push(rowNo);
   });
-  /* 行番号を Excel にそろえる（空の行は空行として残す）。離れた行に値があるときは詰める */
-  var table = [];
-  if (maxRow <= 20000) { rows.forEach(function (r) { while (table.length < r.no - 1) table.push([]); table.push(r.cells); }); }
-  else { table = rows.map(function (r) { return r.cells; }); info.compact = true; }
-  return { rows: table, info: info };
+  var columns = Array.from(used).sort(function (a,b) { return a-b; });
+  var positions = new Map(columns.map(function (column,i) { return [column,i]; }));
+  var table = rows.map(function (cells) {
+    var values = [];
+    cells.forEach(function (cell) { values[positions.get(cell.column)] = cell.value; });
+    return values;
+  });
+  return { rows: table, rowNumbers: rowNumbers, columns: columns, info: info };
 };
 TG.xlsxCell = function (attrs, inner, ctx, info) {
   var t = TG.xmlAttr(attrs, 't') || 'n';
@@ -1920,9 +1935,8 @@ TG.readXlsx = function (buf, entries) {
           var notes = ['Excelのファイルの、シート「' + sheets[k].name + '」を読みました。行の番号は、Excelの行番号と同じです。'];
           if (t.info.dates) notes.push('Excelの日付のセル（' + t.info.dates + '個）は、「2026/09/01」の形に直して読みました。書き出すCSVの日付も、この形です。');
           if (t.info.noValue) notes.push('数式のセルのうち、計算の結果が保存されていない ' + t.info.noValue + '個は空欄として読みました。Excelで開いて保存し直すと、読める場合があります。');
-          if (t.info.compact) notes.push('離れた行に値があるため、空の行を詰めて読みました（行の番号がExcelと合いません）。');
           if (others.length) notes.push('ほかのシート（「' + others.slice(0, 3).join('」「') + '」' + (others.length > 3 ? 'など' : '') + '）は読んでいません。別のシートの明細は、Excelでそのシートを開いて「CSV UTF-8（コンマ区切り）」で保存してから読み込んでください。');
-          return { text: TG.tableToCsv(t.rows), sheet: sheets[k].name, notes: notes };
+          return { text: TG.tableToCsv(t.rows), sheet: sheets[k].name, notes: notes, rowNumbers: t.rowNumbers, columns: t.columns };
         });
       };
       return tryAt(0);
@@ -1940,7 +1954,7 @@ TG.openFile = function (buf, name) {
     var zk = TG.zipKind(buf, entries);
     if (zk.kind !== 'xlsx') return Promise.reject(TG.fileError(zk.kind, zk.detail));
     return TG.readXlsx(buf, entries).then(function (x) {
-      return { text: x.text, encoding: 'Excel（.xlsx）', source: { kind: 'xlsx', sheet: x.sheet, notes: x.notes } };
+      return { text: x.text, encoding: 'Excel（.xlsx）', source: { kind: 'xlsx', sheet: x.sheet, notes: x.notes, rowNumbers: x.rowNumbers, columns: x.columns } };
     }, function (e) { throw e && e.guide ? e : TG.fileError('xlsxbad', e && e.message ? '（' + e.message + '）' : ''); });
   }
   if (kind === 'ole') return Promise.reject(TG.fileError(/^(doc|dot|ppt|pps|msg)$/.test(ext) ? 'office' : 'xls'));
@@ -2695,7 +2709,7 @@ TG.decide = function (row, r, pp, ctx, rows, res, second) {
     var sig = TG.linkOf(pp, t.id).sig;
     var reason = guide[1];
     if (r.transport === 'ride') {
-      reason = r.dup ? '行番号はCSV内の位置です。履歴の並び順だけでは、どちらの乗車か分かりません。元明細の' + row.line +
+      reason = r.dup ? (row.excelLine ? '行番号は元のExcelシートの位置です。' : '行番号はCSV内の位置です。') + '履歴の並び順だけでは、どちらの乗車か分かりません。元明細の' + row.line +
         '行目に対応する利用番号や利用詳細を確かめ、時刻・区間を予定表と照合してください。' :
         '運賃からは移動の目的が分かりません。' + reason;
     }
@@ -3159,6 +3173,12 @@ TG.migrate = function (d) {
   if (d.ds) {
     d.ds.opts = d.ds.opts || {};
     delete d.ds.opts.inSign;
+    var source = d.ds.source;
+    if (source && Array.isArray(source.notes) && source.notes.some(function (s) { return s.includes('空の行を詰めて読みました'); })) {
+      source.notes = source.notes.map(function (s) {
+        return s.replace('行の番号は、Excelの行番号と同じです。', '').replace('離れた行に値があるため、空の行を詰めて読みました（行の番号がExcelと合いません）。', '以前の読み込みで元の行番号が保存されていません。Excelの行番号で照合するには、元のファイルをもう一度読み込んでください。');
+      });
+    }
   }
   return d;
 };
@@ -3184,7 +3204,7 @@ TG.recompute = function () {
     S.purchaseDetailsFor = S.ds.id;
   }
   var stKey = S.ds.id + '|' + JSON.stringify(S.ds.opts || {});
-  if (!D.st || D.stKey !== stKey) { D.st = TG.readText(S.ds.text, S.ds.name, S.ds.encoding, S.ds.opts || {}); D.stKey = stKey; }
+  if (!D.st || D.stKey !== stKey) { D.st = TG.readText(S.ds.text, S.ds.name, S.ds.encoding, S.ds.opts || {}, S.ds.source); D.stKey = stKey; }
   var rows = D.st.rows.slice();
   if (S.ds.includeSummary && D.st.summary.length) rows = rows.concat(D.st.summary).sort(function (a, b) { return a.line - b.line; });
   rows.forEach(function (r, i) { r.key = 'r' + r.line; r.idx = i; });
@@ -3585,7 +3605,7 @@ TG.SAMPLE = {
       /* ファイルの種類を見分ける（PDF・画像などは、ここで案内を出して止める）。Excel は CSV の文字列に直す */
       var dec = await TG.openFile(buf, file.name);
       if (request !== fileRequest) return;
-      var st = TG.readText(dec.text, file.name, dec.encoding, {});
+      var st = TG.readText(dec.text, file.name, dec.encoding, {}, dec.source);
       /* 明細の行がない・日付と金額を読めない行が大半・行が多すぎるときは、仕分けの前で止める */
       var stop = TG.checkStatement(st, file.name);
       if (stop) { fileFail(stop, true); return; }
@@ -4169,7 +4189,7 @@ TG.SAMPLE = {
     var rowsHtml = '';
     for (var j = 0; j < width; j++) {
       var samples = data.slice(0, 3).map(function (r) { return r[j] || ''; }).filter(function (v) { return v; });
-      var colLbl = excel ? TG.colLetter(j) + '列' : (j + 1) + '列目';
+      var colLbl = excel ? TG.colLetter(TG.sourceColumn(src, j)) + '列' : (j + 1) + '列目';
       rowsHtml += '<tr><th scope="row">' + colLbl + (an.headerIndex >= 0 ? '<small>' + esc(an.header[j] || '（空欄）') + '</small>' : '') + '</th><td><select data-col="' + j + '" aria-label="' + colLbl + 'の役割">' + opts.map(function (o) { return '<option value="' + o + '"' + (roleOf(j) === o ? ' selected' : '') + '>' + TG.ROLE_LABEL[o] + '</option>'; }).join('') + '</select></td><td class="smp">' + samples.map(esc).join(' ／ ') + '</td></tr>';
     }
     var prev = D.rows.slice(0, 5).map(function (row) { return '<tr><td>' + esc(row.raw.date) + ' → ' + (row.date ? row.date.iso + '（' + row.date.wd + '）' : '読めません') + '</td><td>' + esc(row.raw.desc) + '</td><td class="r">' + esc(row.raw.amount) + ' → ' + (row.dir === 'in' ? '入金 ' : '支払い ') + amt(row) + '</td></tr>'; }).join('');
@@ -4193,7 +4213,7 @@ TG.SAMPLE = {
       '<h3 style="font-size:14px;margin:10px 0 6px">読み取りの例（先頭5件）</h3><div class="tbl-wrap"><table class="pv"><thead><tr><th>日付</th><th>摘要</th><th>金額</th></tr></thead><tbody>' + prev + '</tbody></table></div>' +
       '<details class="imp-more"><summary>ファイルの情報</summary><dl class="kv"><dt>ファイル</dt><dd>' + esc(S.ds.name) + '</dd>' +
       (excel ? '<dt>形式</dt><dd>Excel（シート「' + esc(src.sheet) + '」）</dd>' : '<dt>文字コード</dt><dd>' + esc(st.encoding) + '</dd><dt>区切り</dt><dd>' + (st.delim === '\t' ? 'タブ' : st.delim === ';' ? 'セミコロン' : 'カンマ') + '</dd>') +
-      '<dt>見出しの行</dt><dd>' + (an.headerIndex >= 0 ? (an.headerIndex + 1) + '行目' : 'なし（中身から推定）') + '</dd><dt>明細の行</dt><dd>' + D.rows.length + '件' + (st.blank ? '（空行 ' + st.blank + '行は読み飛ばし）' : '') + '</dd></dl></details></div>';
+      '<dt>見出しの行</dt><dd>' + (an.headerIndex >= 0 ? TG.sourceLine(src, an.headerIndex) + '行目' : 'なし（中身から推定）') + '</dd><dt>明細の行</dt><dd>' + D.rows.length + '件' + (st.blank ? '（空行 ' + st.blank + '行は読み飛ばし）' : '') + '</dd></dl></details></div>';
     var foot = '<div class="dlg-f"><button type="button" class="btn" data-act="close" data-dlg="dlg-import">閉じる</button><span class="grow"></span><button type="button" class="btn primary" data-act="imp-apply">この読み取り方で仕分ける</button></div>';
     openDlg('dlg-import', '明細の読み取り方', body, foot, { raw: true });
   }
@@ -4578,7 +4598,8 @@ TG.SAMPLE = {
       };
       var own = ['job', 'tools', 'places', 'other'].some(function (f) { return (S.profile[f] || '').trim() && S.profile[f] !== ex[f]; });
       var work = S.ds && D.tally && (D.tally.done || Object.keys(S.purchaseDetails || {}).length);
-      if (own || work) confirmDlg('サンプルで試しますか？', '副業のプロフィールと明細が、配布の架空データ（ライターの記入例と明細A）に置き換わります。' + (S.ds ? '今の明細（' + esc(S.ds.name) + '）の確定区分・メモは、この画面から取り出せなくなります。' : ''), 'サンプルで試す', start);
+      var answered = Object.keys(S.answers || {}).length > 0;
+      if (own || work || answered) confirmDlg('サンプルで試しますか？', '副業のプロフィールと明細が、配布の架空データ（ライターの記入例と明細A）に置き換わります。' + (answered ? '追加質問の回答も消去されます。' : '') + (S.ds ? '今の明細（' + esc(S.ds.name) + '）の確定区分・メモは、この画面から取り出せなくなります。' : ''), 'サンプルで試す', start);
       else start();
     },
     'paste-apply': function () {
