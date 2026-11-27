@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 外部への通信をブラウザの設定で止める（明細もプロフィールも、この端末の外へ出ない）。スクリプトはこのファイルに埋め込んだもの（ハッシュが一致するもの）だけを動かす -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-zAf+S5hVQmPpHPJnYOX5ewGvDvo75WLgv377/xKEVPg='; style-src 'unsafe-inline'; img-src data: blob:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-n88OChp2dGqP1oil4Y6zYlF+M6dalhMo+eDdwtZQIXI='; style-src 'unsafe-inline'; img-src data: blob:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light">
 <meta name="description" content="副業の内容を手がかりに、カード・銀行の明細を「事業候補・私用候補・要判断」に仕分け、本人が確定してCSVに書き出す整理ツール。データはこの端末の外へ送りません。">
@@ -102,6 +102,40 @@ main { max-width: 1240px; margin: 0 auto; padding: 18px 20px 60px; }
 .final.pvt { color: var(--pvt-ink); }
 .final.open { color: var(--muted); font-weight: 600; }
 
+/* ---------- 案内（初めて開いたとき）：何ができるか・流れ・出来上がるCSV ---------- */
+.view.intro { padding-top: 6px; }
+.intro-hero { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: 28px; align-items: center; margin: 6px 0 26px; }
+.intro-kicker { margin: 0 0 4px; font-size: 13px; font-weight: 700; color: var(--ask-ink); letter-spacing: .06em; }
+.view.intro h1 { font-size: 30px; line-height: 1.35; margin: 0 0 10px; }
+.nw { display: inline-block; }   /* 言葉の途中で折り返さない */
+.view.intro .lead { font-size: 16px; max-width: 560px; }
+.intro-cta { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 18px 0 8px; }
+.intro-sample { margin: 0; font-size: 12.5px; color: var(--muted); }
+.intro-safe { display: flex; gap: 8px; align-items: flex-start; margin: 14px 0 0; font-size: 13px; color: var(--ink-2); }
+.intro-safe svg { width: 16px; height: 16px; flex: none; margin-top: 3px; }
+.intro-demo { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; box-shadow: var(--sh); min-width: 0; }
+.intro-demo figcaption { font-size: 12.5px; font-weight: 700; color: var(--muted); margin-bottom: 8px; }
+.intro-demo ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.intro-demo .hint { margin: 10px 0 0; font-size: 12.5px; color: var(--ink-2); }
+.ix { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px 8px 14px; position: relative; background: #FCFCFB; min-width: 0; }
+.ix::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; border-radius: 10px 0 0 10px; }
+.ix.biz::before { background: var(--biz); } .ix.ask::before { background: var(--ask-strong); } .ix.pvt::before { background: var(--pvt); }
+.ix-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: baseline; }
+.ix .cd { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.ix .cn { font-weight: 700; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ix .ca { font-weight: 700; font-size: 14px; white-space: nowrap; }
+.ix-out { display: flex; gap: 8px; align-items: center; margin-top: 4px; min-width: 0; }
+.ix-out .cw { font-size: 12.5px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.intro-h2 { font-size: 17px; margin: 0 0 10px; }
+.intro-steps { list-style: none; margin: 0 0 18px; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.intro-steps li { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; display: grid; gap: 4px; align-content: start; }
+.intro-steps .no { width: 26px; height: 26px; border-radius: 50%; display: inline-grid; place-items: center; background: var(--ink); color: #fff; font-weight: 700; font-size: 13px; }
+.intro-steps b { font-size: 15px; }
+.intro-steps li > span:last-child { font-size: 13px; color: var(--ink-2); line-height: 1.55; }
+.intro-out { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; }
+.intro-out-l { font-weight: 700; color: var(--ink-2); margin-right: 4px; }
+.intro-out .col { border: 1px solid var(--line-2); background: var(--surface); border-radius: 6px; padding: 1px 8px; font-size: 12.5px; }
+
 /* ---------- プロフィール ---------- */
 .intro-actions { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 0 0 18px; }
 .intro-actions .sep { color: var(--muted); font-size: 13px; }
@@ -166,6 +200,8 @@ main { max-width: 1240px; margin: 0 auto; padding: 18px 20px 60px; }
 .pg-bar { width: 160px; height: 10px; background: var(--sunken); border-radius: 99px; overflow: hidden; display: flex; }
 .pg-bar span { display: block; height: 100%; }
 .pg-bar .b { background: var(--biz); } .pg-bar .p { background: var(--pvt); }
+.progress .pg-left { margin: 0; font-size: 13px; color: var(--ink-2); }
+.progress .pg-left strong { color: var(--ink); font-size: 15px; }
 
 .next { display: flex; align-items: center; gap: 14px; background: var(--ink); color: #fff; border-radius: var(--r); padding: 12px 16px; margin: 0 0 12px; }
 .trip-work { margin: 0 0 14px; padding: 14px 16px; border: 1px solid var(--line-2); border-left: 4px solid var(--ask-ink); border-radius: var(--r); background: var(--ask-bg); }
@@ -211,6 +247,9 @@ main { max-width: 1240px; margin: 0 auto; padding: 18px 20px 60px; }
 .clue.zero { border-style: dashed; color: var(--muted); }
 .tool-row { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; margin: -4px 0 12px; }
 .tool-row .hint { font-size: 12.5px; color: var(--ink-2); }
+.bd-more { margin: 0 0 12px; }
+.bd-more summary { width: fit-content; cursor: pointer; font-weight: 700; font-size: 13.5px; color: var(--ink-2); padding: 4px 2px; }
+.bd-more .clues { margin: 6px 0 0; }
 .toggle { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line-2); background: var(--surface); border-radius: 999px; padding: 3px 12px; font-size: 13px; font-weight: 600; min-height: 32px; color: var(--ink-2); }
 .toggle[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
 .toggle svg { width: 14px; height: 14px; }
@@ -376,8 +415,9 @@ dialog.dlg::backdrop { background: rgba(20, 22, 26, .45); }
 .scale .none { color: var(--muted); font-size: 13px; }
 .rv-sec { margin: 0 0 12px; }
 .rv-sec ul { margin: 0; padding-left: 1.1em; font-size: 13.5px; color: var(--ink-2); }
-.rv-q { background: #FBF7EC; border: 1px solid var(--ask-line); border-radius: 12px; padding: 12px 14px; }
-.rv-q .q { font-weight: 800; font-size: 16px; margin: 0 0 10px; }
+/* 本文の最後：確定の前に書ける記入（購入品・メモ）。質問とボタンは下の固定欄（.rv-foot） */
+.rv-q { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+.rv-q > .rv-opts:first-child { margin-top: 0; }
 .rv-purchase { display: grid; gap: 6px; margin: 0 0 12px; padding: 0 0 12px; border-bottom: 1px solid var(--ask-line); }
 .rv-purchase label { font-size: 14px; font-weight: 700; }
 .rv-purchase label small { display: block; font-weight: 400; font-size: 12.5px; color: var(--ink-2); }
@@ -388,6 +428,14 @@ dialog.dlg::backdrop { background: rgba(20, 22, 26, .45); }
 .rv-btns .btn { flex-direction: column; gap: 0; min-height: 60px; font-size: 17px; }
 .rv-btns .btn small { font-size: 12px; font-weight: 600; opacity: .92; }
 .rv-btns .btn[aria-pressed="true"] { box-shadow: 0 0 0 3px var(--surface), 0 0 0 6px var(--ink); }
+/* 確認画面の下の固定欄：質問・事業／私用・前へ／あとで。本文をスクロールしても、いつでも押せる */
+.dlg-f.rv-foot { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 380px); grid-template-areas: "q q" "nav btns"; gap: 8px 16px; align-items: center; background: #FBF7EC; }
+.rv-foot .q { grid-area: q; margin: 0; font-weight: 800; font-size: 15.5px; line-height: 1.5; }
+.rv-foot .rv-btns { grid-area: btns; }
+.rv-foot .rv-btns .btn { min-height: 52px; font-size: 16px; }
+.rv-nav { grid-area: nav; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.rv-nav .grow { flex: 1; }
+.btn > .key { margin-left: -6px; }   /* 「あとで（↓）」のように、ボタンの文字とキーの案内を続けて見せる */
 .rv-opts { display: grid; gap: 8px; margin-top: 10px; font-size: 13.5px; }
 .rv-opts label.same { display: flex; gap: 8px; align-items: flex-start; }
 .rv-opts label.same input { width: 18px; height: 18px; margin-top: 3px; flex: none; }
@@ -399,7 +447,8 @@ dialog.dlg::backdrop { background: rgba(20, 22, 26, .45); }
 .rv-done h3 { font-size: 20px; margin: 8px 0 4px; }
 
 .bulk-g { margin: 0 0 14px; }
-.bulk-g h3 { font-size: 13px; margin: 0 0 6px; color: var(--ink-2); display: flex; gap: 8px; align-items: baseline; }
+.bulk-g h3 { font-size: 13px; margin: 0 0 6px; color: var(--ink-2); display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: baseline; }
+.bulk-why { flex-basis: 100%; font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
 .bulk-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 6px; background: #FCFCFB; }
 .bulk-row .bn { font-weight: 700; font-size: 14px; overflow-wrap: anywhere; }
 .bulk-row .bm { font-size: 12.5px; color: var(--ink-2); }
@@ -455,6 +504,8 @@ footer.ft { max-width: 1240px; margin: 0 auto; padding: 18px 20px 40px; color: v
   .next { flex-wrap: wrap; }
   .next .btn { margin-left: 0; width: 100%; }
   .card .ct { display: inline-block; }
+  .intro-hero { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .intro-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 560px) {
   body { font-size: 14.5px; }
@@ -462,17 +513,30 @@ footer.ft { max-width: 1240px; margin: 0 auto; padding: 18px 20px 40px; color: v
   .notice-in, .steps, main, footer.ft { padding-left: 14px; padding-right: 14px; }
   .steps li { min-width: 0; }
   .steps button { font-size: 0; gap: 0; justify-content: center; }
-  .steps li.cur button { font-size: 12.5px; gap: 6px; }
+  /* 今の段階の名前は1行で読めるよう、幅を多めに取る */
+  .steps li.cur { flex: 2.6 1 0; }
+  .steps li.cur button { font-size: 12.5px; gap: 6px; white-space: nowrap; }
   .view h1 { font-size: 20px; }
-  .hd-tools .chip-btn .t { display: none; }
+  /* 狭い画面では「端末内で処理」は下の案内に任せ、「覚えた店」は名前を出す */
+  .hd-tools .hd-safe { display: none; }
   .scale { grid-template-columns: minmax(0, 1fr); }
   .rv-desc { font-size: 18px; }
   .rv-amt { font-size: 20px; }
   .dlg-b { padding: 14px; }
+  .dlg-f.rv-foot { grid-template-columns: minmax(0, 1fr); grid-template-areas: "q" "btns" "nav"; padding: 10px 14px; }
+  .rv-foot .q { font-size: 14.5px; }
+  .view.intro h1 { font-size: 23px; }
+  .intro-steps { grid-template-columns: minmax(0, 1fr); }
+  .intro-cta .btn { flex: 1 1 100%; }
+}
+/* キーボードの案内（←・→・↓・Z）は、キーボードで操作する画面だけに出す */
+@media (max-width: 560px), (pointer: coarse) {
+  .key { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 @media (forced-colors: active) {
-  .card, .lane, .field, .pf-read, .progress, .qcard, .ex-box, .checks li, .scale .side, .rv-q { border: 1px solid CanvasText; }
+  .card, .lane, .field, .pf-read, .progress, .qcard, .ex-box, .checks li, .scale .side, .rv-q, .intro-demo, .intro-steps li, .ix { border: 1px solid CanvasText; }
+  .ix::before { background: CanvasText; forced-color-adjust: none; }
   .card[data-state="open"] { border-style: dashed; }
   .card[data-final]::before, .card[data-state="open"]::before { background: CanvasText; forced-color-adjust: none; }
   .cat, .final, .tag, .note { border: 1px solid CanvasText; }
@@ -2485,7 +2549,8 @@ TG.tally = function (rows, res, decisions) {
  *
  * 列は 日付・摘要・金額・ツール仕分け・最終区分・理由 の6列。
  * 日付・摘要・金額は元のセルのまま（銀行の入金も元の表記）。
- * ツール仕分けと理由の前半は、最初の判定のまま。本人の確定・記入・メモは、理由の「確定：」以降に書く。
+ * ツール仕分けと理由の前半は、最初の判定のまま。要判断の確定と候補からの変更は理由の「確定：」に、本人の記入・メモは理由の最後に書く。
+ * 候補どおりの確定は「最終区分」の列で分かるので、理由には書かない。
  * 書き出す前に、作ったCSVを自分のパーサーで読み直して、入力と1行ずつ照合する。
  * ========================================================================= */
 
@@ -2521,7 +2586,8 @@ TG.reasonForCsv = function (row, r, d, withPerson) {
   var finalLabel = TG.csvFinalLabel(d);
   if (finalLabel) {
     var changed = (r.cat === 'biz' && d.final === 'pvt') || (r.cat === 'pvt' && d.final === 'biz');
-    parts.push('確定：本人が「' + finalLabel + '」に確定' + (r.cat === 'ask' ? '（要判断を確認）' : (changed ? '（ツールの候補から変更）' : '')) + '。');
+    /* 候補どおりの確定は「最終区分」の列で分かるので、理由には書かない。要判断の確定と、候補からの変更だけを書く。 */
+    if (r.cat === 'ask' || changed) parts.push('確定：本人が「' + finalLabel + '」に確定' + (r.cat === 'ask' ? '（要判断を確認）' : '（ツールの候補から変更）') + '。');
     if (withPerson !== false) {
       if (d.purchase && d.purchase.item) parts.push('本人の記入：購入品「' + d.purchase.item + '」。');
       if (d.memo) parts.push('本人メモ：' + d.memo);
@@ -2596,7 +2662,7 @@ TG.defaultState = function () {
     purchaseDetailsFor: null,
     rules: [],         /* 自分ルール（確定した店の記録） */
     useRules: true,
-    view: 'profile', lane: 'ask', bom: true,
+    view: 'intro', lane: 'ask', bom: true,   /* 初めて開いたときは、何ができるかの案内から */
     exported: null
   };
 };
@@ -2778,6 +2844,17 @@ TG.sameShopRows = function (i, forRecall) {
   return out;
 };
 
+/* ---- 65_sample.js ---- */
+/* =========================================================================
+ * 65_sample.js  「サンプルで試す」で読み込む配布のダミー明細（明細A_カード形式.csv）
+ *   内容は配布ファイルのまま（架空の明細）。仕分けの判定には使わない。
+ * ========================================================================= */
+TG.SAMPLE = {
+  name: '明細A_カード形式.csv',
+  profile: 'writer',
+  text: "利用日,利用店名,利用金額,支払回数,備考\r\n2026/09/01,AIアシスト月額プラン ライトAI,\"3,300\",1,\r\n2026/09/02,ネットスーパー まるごと食卓,\"5,842\",1,\r\n2026/09/03,クラウドサーバー ミナト 月額,\"2,860\",1,\r\n2026/09/04,ドラッグ・ハナミズキ,\"1,986\",1,\r\n2026/09/05,カフェ ルミエール,780,1,\r\n2026/09/06,シネマ・ステラ 鑑賞,\"2,400\",1,\r\n2026/09/08,コワーキングスペース ひだまり 月会費,\"11,000\",1,\r\n2026/09/09,文章校正ツール ヨミナオシ 年額,\"9,800\",1,\r\n2026/09/10,ガソリンスタンド サンライズ,\"5,230\",1,\r\n2026/09/12,スーパー ワカバ屋,\"3,128\",1,\r\n2026/09/12,スーパー　ワカバ屋,\"3,128\",1,\r\n2026/09/14,ドメイン管理 ネームポスト 年額,\"1,980\",1,\r\n2026/09/15,損害保険 おまもり損保 自動車,\"8,420\",1,\r\n2026/09/16,ブックストア みどり堂,\"2,640\",1,\r\n2026/09/18,デジタル書籍 配信 テクノ書院,\"2,420\",1,\r\n2026/09/19,フィットネス ゴリラジム 月会費,\"8,800\",1,\r\n2026/09/21,居酒屋 とりまる,\"6,800\",1,\r\n2026/09/22,画像素材サービス ピクセルバンク 月額,\"1,650\",1,\r\n2026/09/24,ﾗｲﾌﾞﾘｰ ﾍﾞｰｶﾘｰ ｱｻﾋ,\"1,240\",1,\r\n2026/09/25,通信サービス ひかりモバイル,\"7,150\",1,\r\n2026/09/26,美容室 ソレイユ,\"6,600\",1,\r\n2026/09/28,AIアシスト月額プラン ライトAI 返金,\"-3,300\",1,返金\r\n2026/10/01,AIアシスト月額プラン ライトAI,\"3,300\",1,\r\n2026/10/02,ネットスーパー まるごと食卓,\"4,980\",1,\r\n2026/10/03,クラウドサーバー ミナト 月額,\"2,860\",1,\r\n2026/10/04,モバイル交通系ICチャージ,\"3,000\",1,\r\n2026/10/05,動物病院 いぬねこ,\"12,400\",1,\r\n2026/10/07,コワーキングスペース ひだまり 月会費,\"11,000\",1,\r\n2026/10/08,ペットショップ ポチたま,\"3,278\",1,\r\n2026/10/9,取材用 ICレコーダー 電器店 オトミミ堂,\"5,980\",1,\r\n2026/10/11,ホームセンター ハナマサ,\"7,392\",1,\r\n2026/10/13,シネマ・ステラ 鑑賞,\"2,400円\",1,\r\n2026/10/15,携帯アクセサリー モバイルラボ ケーブル,\"1,980\",1,\r\n2026/10/16,ネット通販 ひなた雑貨 日用品,\"7,990\",1,\r\n2026/10/18,書店 ぶんぶん堂 雑誌,980,1,\r\n2026/10/20,スーパー ワカバ屋,\"2,980\",1,\r\n2026/10/22,ランチ 定食屋 みやび,\"1,100\",1,\r\n2026/10/25,ベビー用品 コロコロ堂,\"4,620\",1,\r\n2026/10/27,クリーニング さくら屋,\"1,980\",1,\r\n2026/10/30,ネットスーパー まるごと食卓,\"6,120\",1,\r\n"
+};
+
 /* ---- 70_ui.js ---- */
 /* =========================================================================
  * 70_ui.js  画面（プロフィール → 明細の読み込み → 仕分けと確認 → 書き出し）
@@ -2815,9 +2892,9 @@ TG.sameShopRows = function (i, forRecall) {
   };
 
   var LANE_DESC = {
-    biz: '仕事とのつながりを示す手がかりがある明細です。用途を確認してください。',
-    ask: 'どちらとも言えない明細です。1件ずつ、質問に答えて確定します。',
-    pvt: '生活でよく使う種類で、プロフィールに関係する記述がない明細です。'
+    biz: '仕事とのつながりがある明細。一覧で確かめて確定します。',
+    ask: 'どちらとも言えない明細。1件ずつ確かめて確定します。',
+    pvt: '生活でよく使う種類の明細。一覧で確かめて確定します。'
   };
 
   /* ---------- 小さな部品 ---------- */
@@ -2866,7 +2943,7 @@ TG.sameShopRows = function (i, forRecall) {
     var v = $('#view');
     if (S.view === 'board' && !S.ds) S.view = 'statement';
     if (S.view === 'export' && !S.ds) S.view = 'statement';
-    v.innerHTML = S.view === 'profile' ? viewProfile() : S.view === 'statement' ? viewStatement() : S.view === 'board' ? viewBoard() : viewExport();
+    v.innerHTML = S.view === 'intro' ? viewIntro() : S.view === 'profile' ? viewProfile() : S.view === 'statement' ? viewStatement() : S.view === 'board' ? viewBoard() : viewExport();
     var search = $('#ride-ref');
     if (search && rideSearch && rideSearch.dataset === S.ds.id) {
       search.value = rideSearch.value;
@@ -2885,11 +2962,13 @@ TG.sameShopRows = function (i, forRecall) {
   function renderHeader() {
     var n = TG.ruleGroups().length;
     $('#hd-tools').innerHTML =
-      '<button class="chip-btn" data-act="privacy" aria-label="通信なし（データの扱いを見る）">' + IC.lock + '<span class="t">通信なし</span></button>' +
-      '<button class="chip-btn" data-act="rules" aria-label="自分ルール ' + n + '件">' + IC.book + '<span class="t">自分ルール</span><span class="n num">' + n + '</span></button>';
+      '<button class="chip-btn hd-safe" data-act="privacy" aria-label="端末内で処理（データの扱いを見る）">' + IC.lock + '<span class="t">端末内で処理</span></button>' +
+      '<button class="chip-btn" data-act="rules" aria-label="覚えた店 ' + n + '件（前の明細で確定した店）">' + IC.book + '<span class="t">覚えた店</span><span class="n num">' + n + '</span></button>';
   }
-  var STEPS = [['profile', 'プロフィール'], ['statement', '明細の読み込み'], ['board', '仕分けと確認'], ['export', 'CSVの書き出し']];
+  var STEPS = [['profile', '副業のプロフィール'], ['statement', '明細の読み込み'], ['board', '仕分けと確認'], ['export', 'CSVの書き出し']];
   function renderSteps() {
+    /* 案内の画面では、流れそのものを本文で説明するので段階の表示は出さない */
+    $('#steps').parentNode.hidden = S.view === 'intro';
     var ci = STEPS.map(function (s) { return s[0]; }).indexOf(S.view);
     $('#steps').innerHTML = STEPS.map(function (s, i) {
       var avail = i <= 1 || !!S.ds;
@@ -2900,7 +2979,51 @@ TG.sameShopRows = function (i, forRecall) {
   function renderFooter() {
     $('#ft').innerHTML = '<span>てがかり仕分け — 明細とプロフィールは、この端末のブラウザの中だけで扱います（外部への通信なし）。</span>' +
       (TG.storageError ? '<span>この端末に保存できない設定のため、ページを閉じると内容は消えます。</span>' : '<span>入力と確定の内容は、このブラウザに保存されます。</span>') +
-      '<button class="btn link" data-act="privacy">データの扱い・記録を消す</button>';
+      '<button class="btn link" data-go="intro">使い方（はじめに）</button><button class="btn link" data-act="privacy">データの扱い・記録を消す</button>';
+  }
+
+  /* ---------- 案内（初めて開いたとき）：何ができるか・流れ・出来上がるCSV ---------- */
+  var introCache = null;
+  /* 配布の記入例（ライター）と明細Aを、実際の仕分けにかけた例。区分ごとに最初の1件を見せる。 */
+  function introExamples() {
+    if (introCache !== null) return introCache;
+    introCache = '';
+    try {
+      var st = TG.readText(TG.SAMPLE.text, TG.SAMPLE.name, 'UTF-8', {});
+      st.rows.forEach(function (row) { row.key = 'intro' + row.line; });
+      var pp = TG.parseProfile(TG.EXAMPLES[TG.SAMPLE.profile], {});
+      var res = TG.classifyAll(st.rows, pp, { datasetId: 'intro', rules: [] });
+      introCache = ['biz', 'ask', 'pvt'].map(function (c) {
+        var i = res.map(function (r) { return r.cat; }).indexOf(c);
+        if (i < 0) return '';
+        var row = st.rows[i];
+        return '<li class="ix ' + c + '"><span class="ix-row"><span class="cd num">' + dateLbl(row) + '</span><span class="cn">' + esc(row.raw.desc) + '</span><span class="ca num">' + amt(row) + '円</span></span>' +
+          '<span class="ix-out">' + catChip(c) + '<span class="cw">' + esc(res[i].short) + '</span></span></li>';
+      }).join('');
+    } catch (e) { introCache = ''; }
+    return introCache;
+  }
+  function viewIntro() {
+    var t = S.ds && D.tally;
+    var resume = t ? '<button type="button" class="btn big" data-go="board">続きから（' + esc(S.ds.name) + '・確定 ' + t.done + '/' + t.all + '件）</button>' : '';
+    var examples = introExamples();
+    return '<section class="view intro" aria-labelledby="h-intro">' +
+      '<div class="intro-hero"><div class="intro-main">' +
+      '<p class="intro-kicker">副業の明細の整理ツール</p>' +
+      '<h1 id="h-intro">副業の明細を、<span class="nw">事業と私用に</span><span class="nw">仕分けます</span></h1>' +
+      '<p class="lead">カードや銀行のCSVを読み込むと、1件ずつ「事業候補・要判断・私用候補」に分けて、理由を付けます。最後はあなたが確定して、CSVで保存します。</p>' +
+      '<div class="intro-cta">' + (resume || '<button type="button" class="btn primary big" id="intro-start" data-go="profile">はじめる' + IC.arrowR + '</button>') +
+      '<button type="button" class="btn big" data-act="sample">サンプルで試す</button>' + (resume ? '<button type="button" class="btn link" id="intro-start" data-go="profile">プロフィールから見直す</button>' : '') + '</div>' +
+      '<p class="hint intro-sample">サンプルは配布の架空データ（ライターのプロフィールと、カード明細40件）です。</p>' +
+      '<p class="intro-safe">' + IC.lock + '<span>明細とプロフィールは、この端末のブラウザの中だけで扱います。外部には送りません。</span></p></div>' +
+      (examples ? '<figure class="intro-demo"><figcaption>仕分けの例（サンプルの明細から）</figcaption><ul>' + examples + '</ul><p class="hint">最終区分は「事業」か「私用」。決めるのはあなたです。</p></figure>' : '') + '</div>' +
+      '<h2 class="intro-h2">4つの手順で終わります</h2><ol class="intro-steps">' +
+      '<li><span class="no">1</span><b>副業のプロフィール</b><span>どんな副業かを一言。書いた言葉を手がかりに、仕事に関係しそうな明細を見つけます（空欄でも進めます）。</span></li>' +
+      '<li><span class="no">2</span><b>明細の読み込み</b><span>カード・銀行のCSVを、そのまま入れます。列の名前や並びが違っても読み取ります。</span></li>' +
+      '<li><span class="no">3</span><b>仕分けと確認</b><span>迷う明細（要判断）は1件ずつ、事業候補・私用候補は一覧でまとめて確定します。</span></li>' +
+      '<li><span class="no">4</span><b>CSVの書き出し</b><span>元の明細の行ごとに、ツールの仕分け・あなたが確定した区分・理由を付けて保存します。</span></li></ol>' +
+      '<div class="intro-out"><span class="intro-out-l">保存するCSVの列</span>' + TG.CSV_HEADER.map(function (h) { return '<span class="col">' + esc(h) + '</span>'; }).join('') + '</div>' +
+      '</section>';
   }
 
   /* ---------- ① プロフィール ---------- */
@@ -2908,7 +3031,7 @@ TG.sameShopRows = function (i, forRecall) {
     var back = !!S.ds;
     return '<section class="view" aria-labelledby="h-profile">' +
       '<h1 id="h-profile">副業のプロフィール</h1>' +
-      '<p class="lead">一言書くか、記入例を選んでください。空欄でも明細に進めます。</p>' +
+      '<p class="lead">どんな副業をしているかを書いてください。書いた言葉を手がかりに、仕事に関係しそうな明細を見つけます。一言だけでも、空欄でも進めます。</p>' +
       '<div class="intro-actions"><button type="button" class="btn" data-act="paste">' + IC.paste + 'プロフィール文を貼り付ける</button><span class="sep">記入例を入れる：</span><button type="button" class="btn link" data-act="example" data-ex="writer">ライター</button><button type="button" class="btn link" data-act="example" data-ex="dev">週末開発</button><span class="sep">｜</span><button type="button" class="btn link" data-act="how">仕分けの決まり</button></div>' +
       '<div class="pf-grid"><div class="pf-form">' + fieldHtml(TG.FIELDS[0], 0) +
       '<details class="pf-more"' + (back ? ' open' : '') + '><summary>道具・作業場所・その他も書く（任意）</summary><div>' +
@@ -2989,7 +3112,8 @@ TG.sameShopRows = function (i, forRecall) {
     if (!digest) return Promise.resolve(false);
     return csvDigest(csv).then(function (value) { return value === digest; });
   }
-  async function handleFile(file) {
+  /* force：「サンプルで試す」で、置き換えの確認を済ませてから読み込むとき */
+  async function handleFile(file, force) {
     if (!file) return;
     var request = ++fileRequest;
     if (file.size > 15 * 1024 * 1024) { TG.lastError = 'ファイルが大きすぎます（15MBまで）。'; render(); return; }
@@ -3015,13 +3139,13 @@ TG.sameShopRows = function (i, forRecall) {
         save(true); render();
         window.scrollTo(0, 0);
         var ruled = D.res.filter(function (r) { return r.rule === 'rule'; }).length;
-        toast(D.rows.length + '件を読み込み、仕分けました。' + (ruled ? '自分ルールで ' + ruled + '件を候補にしています。' : ''));
+        toast(D.rows.length + '件を読み込み、仕分けました。' + (ruled ? '覚えた店から ' + ruled + '件を候補にしています。' : ''));
         if (D.st.analysis.confidence !== 'high' || D.st.analysis.signNeedsReview) openImport(true);
         else { var h = $('#view h1'); if (h) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); } }
       }
       var t = D.tally;
       var hasDetails = Object.keys(S.purchaseDetails || {}).length > 0 || !!(S.ds && Object.keys(S.ds.transitHeld || {}).length);
-      if (!S.ds || (!t.done && !hasDetails) || await hasCurrentExport()) { replace(); return; }
+      if (force || !S.ds || (!t.done && !hasDetails) || await hasCurrentExport()) { replace(); return; }
       if (request !== fileRequest) return;
       confirmDlg('別の明細を読み込みますか？', '今の明細（' + esc(S.ds.name) + '）は ' + t.done + '/' + t.all + '件を確定しています。続けると、この明細の確定区分・記録待ち・メモ・購入品の記入をこの画面から取り出せなくなります。', '読み込む', replace);
     } catch (e) {
@@ -3030,6 +3154,7 @@ TG.sameShopRows = function (i, forRecall) {
   }
 
   /* ---------- ③ 仕分けと確認 ---------- */
+  var boardMoreOpen = false;   /* 「プロフィールの言葉で明細を強調する」を開いたままにするか（描き直しても閉じない） */
   function viewBoard() {
     var t = D.tally, an = D.st.analysis;
     var fmt = an.mode === 'split' ? '銀行形式（出金・入金の2列）' : (an.roles.dir >= 0 ? '金額1列・入出金の区分列を優先' : '金額1列・' + (D.st.posIsOut ? 'プラス' : 'マイナス') + 'が支払い');
@@ -3038,10 +3163,12 @@ TG.sameShopRows = function (i, forRecall) {
       '<div class="bd-file"><span class="fn">' + esc(S.ds.name) + '</span><span>' + D.rows.length + '件</span><span>' + fmt + '</span>' +
       '<button type="button" class="btn link" data-act="import">読み取り方を見る</button><button type="button" class="btn link" data-act="new-file">別の明細を読み込む</button></div></div>' +
       progressHtml(t) + '</div>' +
-      nextHtml() + questionHtml() + cluesHtml() +
-      '<div class="tool-row"><span class="hint">カードを押すと、理由の詳しい説明を見て、1件ずつ確定・変更できます。</span><span>' +
+      nextHtml() + questionHtml() +
+      '<div class="tool-row"><span class="hint">カードを押すと、理由を見て1件ずつ確定・変更できます。</span><span>' +
       '<button type="button" class="toggle" data-act="only-open" aria-pressed="' + !!S.onlyOpen + '">' + IC.check + '未確認だけ表示</button> ' +
-      '<button type="button" class="btn link" data-act="how">仕分けの決まりを見る</button></span></div>' +
+      '<button type="button" class="btn link" data-act="how">仕分けの決まり</button></span></div>' +
+      /* 手がかりで明細を強調する操作は、使う人だけが開く（最初の画面の情報量を減らす） */
+      '<details class="bd-more"' + (TG.hl || boardMoreOpen ? ' open' : '') + '><summary>プロフィールの言葉で明細を強調する' + (D.pp.sigs.length ? '（' + D.pp.sigs.length + '語）' : '') + '</summary>' + cluesHtml() + '</details>' +
       '<div class="lane-tabs" role="tablist" aria-label="区分">' + ['biz', 'ask', 'pvt'].map(function (c) { return '<button type="button" role="tab" class="' + c + '" aria-selected="' + (S.lane === c) + '" data-act="lane" data-lane="' + c + '">' + TG.CAT[c].label + '<small>' + t[c].n + '件・確定' + t[c].done + '</small></button>'; }).join('') + '</div>' +
       '<div class="lanes' + (TG.hl ? ' hl' : '') + '" id="lanes">' + ['biz', 'ask', 'pvt'].map(laneHtml).join('') + '</div></section>';
   }
@@ -3049,7 +3176,7 @@ TG.sameShopRows = function (i, forRecall) {
     var pb = t.all ? t.finalBiz / t.all * 100 : 0, pv = t.all ? t.finalPvt / t.all * 100 : 0, left = t.all - t.done;
     return '<div class="progress" role="group" aria-label="確定の進み具合"><div class="pg-txt">確定 <b class="num">' + t.done + '</b> / ' + t.all + '件</div>' +
       '<div class="pg-bar" aria-hidden="true"><span class="b" style="width:' + pb.toFixed(2) + '%"></span><span class="p" style="width:' + pv.toFixed(2) + '%"></span></div>' +
-      '<button type="button" class="btn' + (left ? '' : ' primary') + '" data-act="to-export">' + (left ? 'あと' + left + '件で書き出せます' : IC.dl + 'CSVを書き出す') + '</button></div>';
+      (left ? '<p class="pg-left">あと <strong class="num">' + left + '</strong>件を確定すると、CSVを書き出せます</p>' : '<button type="button" class="btn primary" data-act="to-export">' + IC.dl + 'CSVを書き出す</button>') + '</div>';
   }
   function nx(icon, title, sub, act, label, done) {
     return '<div class="next' + (done ? ' done' : '') + '"><span class="nx-ic">' + icon + '</span><div><div class="nx-t">' + title + '</div><div class="nx-s">' + sub + '</div></div><button type="button" class="btn" data-act="' + act + '">' + label + IC.arrowR + '</button></div>';
@@ -3238,9 +3365,9 @@ TG.sameShopRows = function (i, forRecall) {
     var eff = function (m, ans) { return Object.keys(m).map(function (c) { return '「' + esc(ans) + '」なら' + m[c] + '件を' + TG.CAT[c].label + 'に'; }).join('、'); };
     var effs = []; if (q.ifYes.length) effs.push(eff(q.yesTo, tp.yes)); if (q.ifNo.length) effs.push(eff(q.noTo, tp.no));
     var ex = q.examples.map(function (e) { return '「' + esc(e) + '」'; }).join('');
-    return '<section class="qcard" aria-labelledby="qq"><div class="qh">' + IC.ask + '仕分けに関わる質問（あと' + D.topics.length + '問・飛ばせます）</div>' +
+    return '<section class="qcard" aria-labelledby="qq"><div class="qh">' + IC.ask + '次にやること：仕分けに関わる質問に答える（あと' + D.topics.length + '問・飛ばせます）</div>' +
       '<p class="qq" id="qq">' + esc(tp.q) + '</p>' +
-      '<p class="qi">明細に' + ex + (q.rows.length > q.examples.length ? 'など' : '') + 'があります（' + q.rows.length + '件）。' + effs.join('、') + 'します。プロフィールに書いていないことだけを聞いています。答えはプロフィールに残り、次の明細でも使います。</p>' +
+      '<p class="qi">明細に' + ex + (q.rows.length > q.examples.length ? 'など' : '') + 'があります（' + q.rows.length + '件）。' + effs.join('、') + 'します。答えはプロフィールに残り、次の明細でも使います。</p>' +
       '<div class="qb"><button type="button" class="btn" data-act="topic" data-t="' + tp.id + '" data-a="yes">' + esc(tp.yes) + '</button><button type="button" class="btn" data-act="topic" data-t="' + tp.id + '" data-a="no">' + esc(tp.no) + '</button>' +
       '<button type="button" class="btn link" data-act="topic-skip" data-t="' + tp.id + '">今は答えない</button></div></section>';
   }
@@ -3380,13 +3507,17 @@ TG.sameShopRows = function (i, forRecall) {
     var same = r.needsPurchaseDetails ? [] : TG.sameShopRows(i).filter(function (j) { return !S.dec[D.rows[j].key] && !D.res[j].needsPurchaseDetails; });
     var allSame = TG.sameShopRows(i, true);
     var recall = [];
-    if (allSame.length) recall.push('同じ店の明細：' + allSame.slice(0, 4).map(function (j) { var rw = D.rows[j], dj = S.dec[rw.key]; return dateLbl(rw) + ' ' + amt(rw) + '円（' + (dj ? TG.CAT[dj.final].final + 'で確定' : TG.CAT[D.res[j].cat].label) + '）'; }).join('、') + (allSame.length > 4 ? ' ほか' + (allSame.length - 4) + '件' : ''));
-    r.notes.forEach(function (n) { if (n.kind !== 'format') recall.push(n.text); });
+    /* 同じ店の明細が「定期的な支払い」の行だけなら、1行にまとめる（同じ明細を2回書かない） */
+    var recurringOnly = allSame.length > 0 && (r.recurring || []).length > 0 && allSame.every(function (j) { return r.recurring.indexOf(j) >= 0; });
+    if (allSame.length) recall.push((recurringOnly ? '定期的な支払い（同じ店・同じ金額）：' : '同じ店の明細：') + allSame.slice(0, 4).map(function (j) { var rw = D.rows[j], dj = S.dec[rw.key]; return dateLbl(rw) + ' ' + amt(rw) + '円（' + (dj ? TG.CAT[dj.final].final + 'で確定' : TG.CAT[D.res[j].cat].label) + '）'; }).join('、') + (allSame.length > 4 ? ' ほか' + (allSame.length - 4) + '件' : ''));
+    r.notes.forEach(function (n) { if (n.kind !== 'format' && !(recurringOnly && n.kind === 'recurring')) recall.push(n.text); });
     if (r.refOf !== undefined) { var o = D.rows[r.refOf], od = S.dec[o.key]; recall.push('返金の元：' + dateLbl(o) + '「' + o.raw.desc + '」' + amt(o) + '円（' + (od ? TG.CAT[od.final].final + 'で確定' : '未確認') + '）'); }
     var fmtNote = r.notes.filter(function (n) { return n.kind === 'format'; }).map(function (n) { return n.text; });
     var reading = TG.hasHalfKana(row.raw.desc) ? '<div class="rv-read">読み：' + esc(TG.readable(row.raw.desc)) + '</div>' : '';
     var list = function (a) { return a.length ? '<ul>' + a.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : '<p class="none">特になし</p>'; };
-    var facts = (r.quoted.length && r.rule !== 'purpose-conflict' ? [TG.readFrom(r) + '「' + r.typeLabel + '」と推定'] : []).concat(r.facts || []);
+    /* 理由の文に「摘要の〜から、種類を〜と読み取りました」があれば、同じことをここでは繰り返さない */
+    var readLine = r.quoted.length && r.rule !== 'purpose-conflict' && r.long.indexOf(TG.readFrom(r)) < 0 ? [TG.readFrom(r) + '「' + r.typeLabel + '」と推定'] : [];
+    var facts = readLine.concat(r.facts || []);
     var inOut = row.dir === 'in' ? ((r.type && r.type.id === 'refund') || r.rule === 'refund' ? '返金' : '入金') : '支払い';
     var bizSub = row.dir === 'in' ? '副業に関係する入金' : '仕事で使った', pvtSub = row.dir === 'in' ? '副業に関係しない' : '仕事ではない';
     var memoField = '<label class="memo"><span>' + (targeted ? 'この行の照合メモ（任意・CSVに保存）' : 'メモ（任意。CSVの理由に残ります）') + '</span><input type="text" id="rv-memo" maxlength="200" value="' + esc(d ? d.memo : ((S.purchaseDetails[key] || {}).memoDraft || (heldTransit(key) ? S.ds.transitHeld[key] : ''))) + '" placeholder="' + (targeted ? '利用番号・乗車時刻・照合した用途' : row.dir === 'in' ? '入金の心当たりや照合した記録' : '何に使ったか、何を見て確かめたか') + '"></label>';
@@ -3406,21 +3537,26 @@ TG.sameShopRows = function (i, forRecall) {
       /* 天秤（事業寄り・私用寄りの手がかり）は最初から開いておく */
       '<details class="rv-evidence" open><summary>判定に使った手がかり' + (recall.length ? '・関連する明細' : '') + '</summary>' +
       /* 記載がないこと・どちらにも使う種類は、どちらかの証拠ではないので天秤の外（照合）に置く */
-      (facts.length ? '<p class="rv-facts"><b>照合</b>' + facts.map(esc).join('／') + '</p>' : '') +
+      (facts.length ? '<p class="rv-facts"><b>読み取ったこと</b>' + facts.map(esc).join('／') + '</p>' : '') +
       '<div class="scale"><div class="side biz"><h4>' + IC.biz + '事業寄りの手がかり</h4>' + list(r.pro) + '</div><div class="side pvt"><h4>' + IC.pvt + '私用寄りの手がかり</h4>' + list(r.con) + '</div></div>' +
       (recall.length ? '<div class="rv-sec"><h3>関連する明細</h3><ul>' + recall.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div>' : '') + '</details>' +
-      '<div class="rv-q">' + (item ? itemField(key) : '') + (targeted ? memoField : '') + '<p class="q" id="rv-q">' + (mate ? 'この行に対応する乗車を特定できましたか？　照合できた用途を選んでください。' : esc(r.question)) + '</p>' +
-      '<div class="rv-btns" role="group" aria-labelledby="rv-q"><button type="button" class="btn biz" data-act="rv-decide" data-final="biz" aria-pressed="' + (!!d && d.final === 'biz') + '">事業<small>' + bizSub + (R.mode === 'queue' ? (mate ? '（←・Enter）' : '（←）') : '') + '</small></button>' +
-      '<button type="button" class="btn pvt" data-act="rv-decide" data-final="pvt" aria-pressed="' + (!!d && d.final === 'pvt') + '">私用<small>' + pvtSub + (R.mode === 'queue' ? (mate ? '（→・Enter）' : '（→）') : '') + '</small></button></div>' +
+      /* 本文の最後は、確定の前に書ける記入（購入品・メモ・同じ店への適用）。質問と事業・私用のボタンは下の固定欄に置く */
+      '<div class="rv-q">' + (item ? itemField(key) : '') + (targeted ? memoField : '') +
       '<div class="rv-opts">' + (offerHold ? '<button type="button" class="btn sm" data-act="rv-skip">記録を見てあとで決める</button>' : '') + (same.length ? '<label class="same"><input type="checkbox" id="rv-same"><span>同じ店のほかの未確認 ' + same.length + '件（' + same.slice(0, 3).map(function (j) { return dateLbl(D.rows[j]) + ' ' + amt(D.rows[j]) + '円'; }).join('、') + (same.length > 3 ? ' など' : '') + '）にも、同じ区分を付ける</span></label>' : '') +
       (targeted ? '' : memoField) +
       (row.dir === 'out' ? '<p class="hint rv-mixed">仕事と私用の両方に使った支払いは、その内容もメモに書けます。</p>' : '') +
       (d ? '<p class="hint">現在は「' + decisionLabel(d) + '」で確定しています。' + (item ? '記入やメモを変えたときは、' : 'メモを変えたときは、') + '事業・私用のボタンで保存します。</p>' : '') +
       '</div></div></div>';
-    var foot = '<div class="dlg-f">' + (R.mode === 'queue'
-      ? '<button type="button" class="btn" data-act="rv-prev"' + (R.pos ? '' : ' disabled') + '>前へ</button>' + (offerHold ? '' : '<button type="button" class="btn" data-act="rv-skip">あとで（↓）</button>') + (R.undo.length ? '<button type="button" class="btn" data-act="rv-undo">元に戻す</button>' : '') + '<span class="grow"></span><span class="kbd">←</span><span class="kbd">→</span><span class="kbd">↓</span><span class="kbd">Z</span>'
-      : (d ? '<button type="button" class="btn" data-act="rv-clear">未確認に戻す</button>' : '') + '<span class="grow"></span><button type="button" class="btn" data-act="close" data-dlg="dlg-review">' + (d ? '閉じる' : '確定せず一覧に戻る') + '</button>') + '</div>';
-    inner.innerHTML = dlgHead('dlg-review', title, meter) + body + (offerHold && R.mode !== 'queue' ? '' : foot);
+    /* キーの案内は、キーボードで操作できる画面だけに出す（スマホ幅・タッチ操作では隠す） */
+    var keyTip = function (k) { return R.mode === 'queue' ? '<span class="key">（' + k + '）</span>' : ''; };
+    var question = '<p class="q" id="rv-q">' + (mate ? 'この乗車に対応する利用詳細を確かめてから、用途を選んでください。' : esc(r.question)) + '</p>';
+    var buttons = '<div class="rv-btns" role="group" aria-labelledby="rv-q"><button type="button" class="btn biz" data-act="rv-decide" data-final="biz" aria-pressed="' + (!!d && d.final === 'biz') + '">事業<small>' + bizSub + keyTip(mate ? '←・Enter' : '←') + '</small></button>' +
+      '<button type="button" class="btn pvt" data-act="rv-decide" data-final="pvt" aria-pressed="' + (!!d && d.final === 'pvt') + '">私用<small>' + pvtSub + keyTip(mate ? '→・Enter' : '→') + '</small></button></div>';
+    var nav = R.mode === 'queue'
+      ? '<button type="button" class="btn" data-act="rv-prev"' + (R.pos ? '' : ' disabled') + '>前へ</button>' + (offerHold ? '' : '<button type="button" class="btn" data-act="rv-skip">あとで' + keyTip('↓') + '</button>') + (R.undo.length ? '<button type="button" class="btn" data-act="rv-undo">元に戻す' + keyTip('Z') + '</button>' : '')
+      : (offerHold ? '' : (d ? '<button type="button" class="btn" data-act="rv-clear">未確認に戻す</button>' : '') + '<span class="grow"></span><button type="button" class="btn" data-act="close" data-dlg="dlg-review">' + (d ? '閉じる' : '確定せず一覧に戻る') + '</button>');
+    var foot = '<div class="dlg-f rv-foot">' + question + buttons + (nav ? '<div class="rv-nav">' + nav + '</div>' : '') + '</div>';
+    inner.innerHTML = dlgHead('dlg-review', title, meter) + body + foot;
     if (item) itemHint();
     $('.dlg-b', inner).scrollTop = 0;
     $('.rv-desc', inner).focus({ preventScroll: true });
@@ -3520,14 +3656,20 @@ TG.sameShopRows = function (i, forRecall) {
     var body = '<div class="dlg-b"><p class="lead" style="margin-top:0">' + directions + '</p>' +
       order.map(function (g) {
         var sum = 0; groups[g].forEach(function (i) { sum = TG.addAmounts(sum, D.rows[i].amount || 0); });
-        return '<div class="bulk-g"><h3>' + esc(g) + ' <span>' + groups[g].length + '件・' + TG.yen(sum) + '円</span></h3>' + groups[g].map(function (i) {
+        /* 同じ種類の行で理由の要約がそろっていれば、見出しに1回だけ書く（同じ文を行ごとに繰り返さない） */
+        var firstShort = D.res[groups[g][0]].short;
+        var common = groups[g].length > 1 && groups[g].every(function (i) { return D.res[i].short === firstShort; }) ? firstShort : '';
+        return '<div class="bulk-g"><h3>' + esc(g) + ' <span>' + groups[g].length + '件・' + TG.yen(sum) + '円</span>' + (common ? '<small class="bulk-why">' + esc(common) + '</small>' : '') + '</h3>' + groups[g].map(function (i) {
           var row = D.rows[i], r = D.res[i];
           var action = TG.needsPurchaseDetails(row, r)
             ? '<button type="button" class="btn sm" data-act="bk-purchase" data-key="' + row.key + '">' + (S.dec[row.key] ? TG.CAT[S.dec[row.key].final].final + 'で確定・見直す' : '1件ずつ確認') + '</button>'
             : seg(row.key, B.sel[row.key]);
-          /* 同じ日・同じ店・同じ金額の行は、まとめて確定する前に気づけるよう元の行番号を添える */
-          var sourceLine = r.notes.some(function (n) { return n.kind === 'dup'; }) ? '重複の可能性（元明細の' + row.line + '行目）' : '';
-          return '<div class="bulk-row"><div><div class="bn">' + esc(row.raw.desc || '（摘要なし）') + '</div><div class="bm">' + dateLbl(row) + '・' + (row.dir === 'in' ? '入金 ' : '') + amt(row) + '円・' + (sourceLine ? sourceLine + '・' : '') + esc(r.short) + '</div>' + rowNotesHtml(row) + '</div>' + action + '</div>';
+          /* 同じ日・同じ店・同じ金額の行は、まとめて確定する前に気づけるよう、どの行どうしかを元の行番号で示す */
+          var sourceLine = r.dupLines && r.notes.some(function (n) { return n.kind === 'dup'; }) ? '重複の可能性（元明細の' + TG.lineList(r.dupLines) + 'が同じ日・店・金額）' : '';
+          var meta = [dateLbl(row), (row.dir === 'in' ? '入金 ' : '') + amt(row) + '円'];
+          if (sourceLine) meta.push(sourceLine);
+          if (!common) meta.push(esc(r.short));
+          return '<div class="bulk-row"><div><div class="bn">' + esc(row.raw.desc || '（摘要なし）') + '</div><div class="bm">' + meta.join('・') + '</div>' + rowNotesHtml(row) + '</div>' + action + '</div>';
         }).join('') + '</div>';
       }).join('') + '</div>';
     var parts = []; if (cnt.biz) parts.push('事業 ' + cnt.biz); if (cnt.pvt) parts.push('私用 ' + cnt.pvt);
@@ -3621,8 +3763,8 @@ TG.sameShopRows = function (i, forRecall) {
       '<p class="lane-d" style="margin:0 0 10px">例：「文章校正ツール」と書いた人の校正ツールの支払いは事業候補。「参考資料の書籍」と書いた人の書店の支払いは、私用の本もありうるので要判断。</p>' +
       '<h3 style="font-size:14px;margin:0">2. 判定表より先に見ること（上から順に）</h3><ol class="ol">' +
       '<li>日付・金額を読み取れない明細、摘要が空欄の明細は要判断にします。</li>' +
-      '<li>自分ルール：交通の明細は1件ずつ確認します。ほかの種類では、前の明細で同じ店を確定していれば、その区分の候補にします。事業と私用の記録が両方ある店は要判断です。</li>' +
-      '<li>返金：返金日までの同じ店・同じ金額の支払いを探します。元の支払いが見つかれば、その候補にそろえます。見つからないときは自分ルールを参照し、手がかりが足りなければ要判断にします。</li>' +
+      '<li>覚えた店（前の明細で確定した店）：交通の明細は1件ずつ確認します。ほかの種類では、前の明細で同じ店を確定していれば、その区分の候補にします。事業と私用の記録が両方ある店は要判断です。</li>' +
+      '<li>返金：返金日までの同じ店・同じ金額の支払いを探します。元の支払いが見つかれば、その候補にそろえます。見つからないときは覚えた店を参照し、手がかりが足りなければ要判断にします。</li>' +
       '<li>入金：プロフィールの受け取り元（「編集部から」「アプリストアから」など）と一致すれば事業候補。利息・給与は私用候補。それ以外は要判断。</li>' +
       '<li>ATMの引き出し・振込・カードの引き落とし：使い道が明細から分からないので要判断。</li>' +
       '<li>制作材料：プロフィールに「陶土と釉薬を仕入れて器を作ります」と書くと、「透明釉薬」の購入は事業候補です。「趣味用の釉薬」は、この材料名を根拠に事業候補にはしません。材料名を書いた人の、店名だけで品物が分からない支払い（ホームセンター・通販など）は要判断にし、1件ずつ確かめます。材料名を書いていない人では、店名だけの明細も一覧でまとめて確定できます。</li>' +
@@ -3630,18 +3772,18 @@ TG.sameShopRows = function (i, forRecall) {
       '<li>「車は使わない」のように、使わないと書いたもの：私用候補。</li></ol>' +
       '<h3 style="font-size:14px;margin:0">3. 区分は変えずに知らせること</h3><ul class="fine" style="margin:4px 0 0">' +
       '<li>重複の可能性（同じ日・同じ店・同じ金額）。どちらの行も消さずに残します。</li><li>定期的な支払い（同じ店・同じ金額が別の月にもある）。</li><li>返金の元と返金の行。</li></ul>' +
-      '<h3 style="font-size:14px;margin:10px 0 0">4. あなたの確定とツール仕分け</h3><p class="lane-d" style="margin:4px 0 0">確定・記入・メモは、ツール仕分けと理由を書き換えません。CSVの「ツール仕分け」は最初の判定のまま残し、あなたの確定・記入・メモは理由の欄の「確定：」に続けて書きます。仕事と私用の両方に使った支払いは、その内容をメモに残せます。</p></div>';
+      '<h3 style="font-size:14px;margin:10px 0 0">4. あなたの確定とツール仕分け</h3><p class="lane-d" style="margin:4px 0 0">確定・記入・メモは、ツール仕分けと理由を書き換えません。CSVの「ツール仕分け」は最初の判定のまま残し、あなたが確定した区分は「最終区分」に書きます。要判断を確定した行と、候補から変えた行には、理由の最後に「確定：」を付けます。記入とメモも、理由の最後に残します。仕事と私用の両方に使った支払いは、その内容をメモに残せます。</p></div>';
     var foot = '<div class="dlg-f"><span class="grow"></span><button type="button" class="btn primary" data-act="close" data-dlg="dlg-how">閉じる</button></div>';
     openDlg('dlg-how', '仕分けの決まり', body, foot, { raw: true });
   }
 
-  /* ---------- 引き継ぎファイル（プロフィール・追加の質問の答え・自分ルール） ---------- */
+  /* ---------- 引き継ぎファイル（プロフィール・追加の質問の答え・覚えた店） ---------- */
   function backupSave() {
     var data = { app: 'tegakari-shiwake', v: 1, savedAt: new Date().toISOString(), profile: S.profile, answers: S.answers, rules: S.rules };
     var blob = new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' });
     var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'てがかり仕分け_引き継ぎ_' + new Date().toISOString().slice(0, 10) + '.json';
     document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
-    toast('プロフィール・追加の質問の答え・自分ルールを保存しました。');
+    toast('プロフィール・追加の質問の答え・覚えた店を保存しました。');
   }
   function backupLoad(file) {
     if (!file) return;
@@ -3654,29 +3796,29 @@ TG.sameShopRows = function (i, forRecall) {
       S.answers = d.answers || {};
       save(true); TG.recompute(); D = TG.D;
       var dl = $('#dlg-rules'); if (dl) dl.close();
-      render(); toast('引き継ぎファイルを読み込みました（プロフィールと、自分ルール ' + added + '件）。');
+      render(); toast('引き継ぎファイルを読み込みました（プロフィールと、覚えた店 ' + added + '件）。');
     }).catch(function (e) { toast('読み込めませんでした：' + e.message); });
   }
 
-  /* ---------- 自分ルール・データの扱い・貼り付け・確認 ---------- */
+  /* ---------- 覚えた店・データの扱い・貼り付け・確認 ---------- */
   function openRules() {
     var gs = TG.ruleGroups();
     var body = '<div class="dlg-b"><p class="lead" style="margin-top:0">あなたが確定した区分を、店ごとに覚えています。次に読み込む明細（別のカード、来年の明細）に同じ店が出てくると、その区分を候補にし、理由に「前回、あなたが〜と確定した店です」と出します。確定は毎回あなたが行います。今の明細の中では使いません。</p>' +
-      '<div class="opt-row"><label><input type="checkbox" id="use-rules"' + (S.useRules ? ' checked' : '') + '>自分ルールを使う</label></div>' +
+      '<div class="opt-row"><label><input type="checkbox" id="use-rules"' + (S.useRules ? ' checked' : '') + '>覚えた店を、次の明細の候補に使う</label></div>' +
       (gs.length ? gs.map(function (g) {
         var e = g.items[g.items.length - 1];
         return '<div class="rule-row"><div><div class="rk">' + esc(e.desc) + '</div><div class="rs">' + (g.biz ? '事業 ' + g.biz + '件 ' : '') + (g.pvt ? '私用 ' + g.pvt + '件 ' : '') + '・' + Object.keys(g.files).map(esc).join('、') + '</div></div><button type="button" class="btn sm" data-act="rule-del" data-k="' + esc(g.key) + '">削除</button></div>';
       }).join('') : '<p class="clue-empty">まだありません。明細を確定すると、ここに増えます。</p>') + '</div>';
-    body = body.replace(/<\/div>$/, '<h3 style="font-size:14px;margin:16px 0 4px">別のパソコンや来年に引き継ぐ</h3><p class="lane-d" style="margin:0 0 8px">プロフィール・追加の質問の答え・自分ルールを保存します。自分ルールには、記録した行の摘要、日付、元のファイル名、確定区分、確定した時刻が入ります。現在の明細と本人メモは、このブラウザで続きを確認できます。</p>' +
+    body = body.replace(/<\/div>$/, '<h3 style="font-size:14px;margin:16px 0 4px">別のパソコンや来年に引き継ぐ</h3><p class="lane-d" style="margin:0 0 8px">プロフィール・追加の質問の答え・覚えた店を保存します。覚えた店には、記録した行の摘要、日付、元のファイル名、確定区分、確定した時刻が入ります。現在の明細と本人メモは、このブラウザで続きを確認できます。</p>' +
       '<div class="opt-row"><button type="button" class="btn sm" data-act="backup-save">' + IC.dl + 'ファイルに保存</button><button type="button" class="btn sm" data-act="backup-load">' + IC.upload + 'ファイルから読み込む</button><input type="file" id="backup-file" class="sr" accept=".json,application/json" tabindex="-1" aria-hidden="true"></div></div>');
     var foot = '<div class="dlg-f">' + (gs.length ? '<button type="button" class="btn" data-act="rule-clear">すべて削除</button>' : '') + '<span class="grow"></span><button type="button" class="btn primary" data-act="close" data-dlg="dlg-rules">閉じる</button></div>';
-    openDlg('dlg-rules', '自分ルール（' + gs.length + '店）', body, foot, { raw: true });
+    openDlg('dlg-rules', '覚えた店（' + gs.length + '店）', body, foot, { raw: true });
   }
   function openPrivacy() {
     var body = '<div class="dlg-b"><h3 style="margin:0 0 6px;font-size:16px">このページは、外部と通信しません</h3>' +
       '<p>明細とプロフィールは、この端末のブラウザの中だけで読み込み・仕分けます。外部のサーバーへは送りません。外部のライブラリや書体も読み込みません。ページの設定（Content-Security-Policy：connect-src \'none\' など）で、外部への通信そのものを止めています。</p>' +
       '<p>確かめ方：ブラウザの開発者ツールの「ネットワーク」を開いたまま操作すると、ページを開いたあとに通信が起きないことを確認できます。</p>' +
-      '<h3 style="margin:14px 0 6px;font-size:16px">この端末に保存しているもの</h3><ul class="fine" style="margin:0"><li>プロフィールと、追加の質問の答え</li><li>読み込んだ明細の内容と、あなたが確定した区分・メモ</li><li>自分ルール（店ごとの確定の記録）</li></ul>' +
+      '<h3 style="margin:14px 0 6px;font-size:16px">この端末に保存しているもの</h3><ul class="fine" style="margin:0"><li>プロフィールと、追加の質問の答え</li><li>読み込んだ明細の内容と、あなたが確定した区分・メモ</li><li>覚えた店（店ごとの確定の記録）</li></ul>' +
       '<p>保存先は、このブラウザの localStorage です。再読み込みしても続きから再開できます。共用のパソコンでは、使い終わったら記録を消してください。</p>' +
       '<p class="lane-d">' + esc(TG.DISCLAIMER) + '</p></div>';
     var foot = '<div class="dlg-f"><button type="button" class="btn" data-act="wipe">この端末の記録をすべて消す</button><span class="grow"></span><button type="button" class="btn primary" data-act="close" data-dlg="dlg-privacy">閉じる</button></div>';
@@ -3898,7 +4040,7 @@ TG.sameShopRows = function (i, forRecall) {
       chk(true, '読み込んだ ' + t.all + '行を、すべて書き出します', '元の明細を1行も欠かさず、読み込んだ順に並べます' + excluded + '。') +
       chk(!left, left ? 'あと ' + left + '件が未確認です' : '最終区分は、すべてあなたが確定しました', left ? '未確認の明細を確定すると、書き出せます。' : '事業 ' + t.finalBiz + '件・私用 ' + t.finalPvt + '件。') +
       chk(!!(v && v.ok), '日付・摘要・金額は、元の表記のまま', v ? (v.ok ? '書き出す内容を読み直して、' + v.rowsOut + '行すべてを1行ずつ照合しました。' : esc(v.problems.slice(0, 3).join(' '))) : 'すべて確定したあとに、書き出す内容を読み直して照合します。') +
-      chk(true, '列：' + TG.CSV_HEADER.join('／'), 'ツール仕分けは最初の判定のまま（事業候補 ' + t.biz.n + '件・要判断 ' + t.ask.n + '件・私用候補 ' + t.pvt.n + '件）です。あなたの確定・記入・メモは、理由の欄の「確定：」に続けて書きます。') + '</ul>';
+      chk(true, '列：' + TG.CSV_HEADER.join('／'), 'ツール仕分けは最初の判定のまま（事業候補 ' + t.biz.n + '件・要判断 ' + t.ask.n + '件・私用候補 ' + t.pvt.n + '件）です。要判断を確定した行と候補から変えた行は、理由の最後に「確定：」を付けます。記入とメモも理由の最後に残します。') + '</ul>';
     var table = outputTable.slice(0, 13);
     var pv = '<div class="tbl-wrap"><table class="pv"><thead><tr>' + table[0].map(function (h) { return '<th>' + esc(h) + '</th>'; }).join('') + '</tr></thead><tbody>' + table.slice(1).map(function (r) { return '<tr>' + r.map(function (c, j) { return '<td class="' + ['d', 'n', 'r', 'c', 'c', 'why'][j] + '">' + esc(c) + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table></div>';
     var ready = !left && v && v.ok;
@@ -3949,6 +4091,20 @@ TG.sameShopRows = function (i, forRecall) {
       var apply = function () { S.profile = { job: ex.job, tools: ex.tools, places: ex.places, other: ex.other }; save(true); D.pp = TG.parseProfile(S.profile, S.answers); render(); toast('記入例を入れました（配布の架空プロフィール）。'); };
       var filled = ['job', 'tools', 'places', 'other'].some(function (f) { return (S.profile[f] || '').trim(); });
       if (filled) confirmDlg('記入例で置き換えますか？', '今の4つの欄の内容は、記入例で置き換わります。', '置き換える', apply); else apply();
+    },
+    /* 配布の架空データ（ライターの記入例＋明細A）を読み込み、仕分けの結果まで一度に進む */
+    'sample': function () {
+      var ex = TG.EXAMPLES[TG.SAMPLE.profile];
+      var start = function () {
+        S.profile = { job: ex.job, tools: ex.tools, places: ex.places, other: ex.other };
+        S.answers = {}; S.skipTopics = {};
+        save(true);
+        handleFile(new File([TG.SAMPLE.text], TG.SAMPLE.name, { type: 'text/csv' }), true);
+      };
+      var own = ['job', 'tools', 'places', 'other'].some(function (f) { return (S.profile[f] || '').trim() && S.profile[f] !== ex[f]; });
+      var work = S.ds && D.tally && (D.tally.done || Object.keys(S.purchaseDetails || {}).length);
+      if (own || work) confirmDlg('サンプルで試しますか？', '副業のプロフィールと明細が、配布の架空データ（ライターの記入例と明細A）に置き換わります。' + (S.ds ? '今の明細（' + esc(S.ds.name) + '）の確定区分・メモは、この画面から取り出せなくなります。' : ''), 'サンプルで試す', start);
+      else start();
     },
     'paste-apply': function () {
       var t = $('#paste-ta'); if (!t || !t.value.trim()) { toast('貼り付ける文を入れてください。'); return; }
@@ -4040,8 +4196,8 @@ TG.sameShopRows = function (i, forRecall) {
     'to-export': function () { go('export'); },
     'download': function () { download(); },
     'rule-del': function (b) { var k = b.getAttribute('data-k'); S.rules = S.rules.filter(function (e) { return ((e.tokens && e.tokens[0]) || e.desc) !== k; }); save(true); TG.recompute(); D = TG.D; $('#dlg-rules').close(); openRules(); render(); },
-    'rule-clear': function () { confirmDlg('自分ルールをすべて削除しますか？', '店ごとの確定の記録をすべて消します。今の明細の確定は残ります。', '削除する', function () { S.rules = []; save(true); TG.recompute(); D = TG.D; render(); toast('自分ルールを削除しました。'); }); },
-    'wipe': function () { confirmDlg('この端末の記録をすべて消しますか？', 'プロフィール、読み込んだ明細、確定した区分とメモ、自分ルールを、このブラウザから消します。元に戻せません。', 'すべて消す', function () { TG.clearAll(); S = TG.S; TG.recompute(); D = TG.D; render(); toast('この端末の記録をすべて消しました。'); }); },
+    'rule-clear': function () { confirmDlg('覚えた店をすべて削除しますか？', '店ごとの確定の記録をすべて消します。今の明細の確定は残ります。', '削除する', function () { S.rules = []; save(true); TG.recompute(); D = TG.D; render(); toast('覚えた店を削除しました。'); }); },
+    'wipe': function () { confirmDlg('この端末の記録をすべて消しますか？', 'プロフィール、読み込んだ明細、確定した区分とメモ、覚えた店を、このブラウザから消します。元に戻せません。', 'すべて消す', function () { TG.clearAll(); S = TG.S; TG.recompute(); D = TG.D; render(); toast('この端末の記録をすべて消しました。'); }); },
     'confirm-ok': function () { var f = TG._confirmOk; TG._confirmOk = null; var d = $('#dlg-confirm'); if (d) d.close(); if (f) f(); },
     'how': openHow,
     'only-open': function () { S.onlyOpen = !S.onlyOpen; save(); render(); var b = $('[data-act="only-open"]'); if (b) b.focus(); },
@@ -4057,6 +4213,7 @@ TG.sameShopRows = function (i, forRecall) {
 
   function bind() {
     window.addEventListener('pagehide', function () { saveDraft(); if (TG._saveTimer !== null) save(true); });
+    document.addEventListener('toggle', function (e) { if (e.target && e.target.classList && e.target.classList.contains('bd-more')) boardMoreOpen = e.target.open; }, true);
     document.addEventListener('click', function (e) {
       var b = e.target.closest ? e.target.closest('[data-act],[data-go]') : null;
       if (!b || b.disabled) return;
