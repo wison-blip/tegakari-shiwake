@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 外部への通信をブラウザの設定で止める（明細もプロフィールも、この端末の外へ出ない）。スクリプトはこのファイルに埋め込んだもの（ハッシュが一致するもの）だけを動かす -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-6V28MTSHr+vA23fyQJ94MjTO8G5o0xoCK9OhcQOYtfE='; style-src 'unsafe-inline'; img-src data: blob:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-KVV5wcRgtgi1lMp6d8TY/HklZOxKD/ORhwWirKqQA3c='; style-src 'unsafe-inline'; img-src data: blob:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light">
 <meta name="description" content="副業の内容を手がかりに、カード・銀行の明細を「事業候補・私用候補・要判断」に仕分け、本人が確定してCSVに書き出す整理ツール。データはこの端末の外へ送りません。">
@@ -580,6 +580,17 @@ footer.ft { max-width: 1240px; margin: 0 auto; padding: 18px 20px 40px; color: v
   .card { break-inside: avoid; }
 }
 
+.practice-bar,.ex-received,.board-search,.review-summary { display:block; margin:8px 0; }
+.board-search input { max-width:100%; padding:8px; border:1px solid var(--line-2); border-radius:6px; }
+.review-summary { font-size:13px; margin:0; color:var(--ink-2); }
+.bd-file .toast { flex-basis:100%; background:var(--surface); color:var(--ink); box-shadow:none; padding:2px 0; }
+#save-warning:not([hidden]) { position:sticky;top:0;z-index:55;padding:10px;background:#fff0ce;color:#382800;text-align:center; }
+@media (max-width:600px) {
+  .view textarea,.view input:not([type=checkbox]),dialog input:not([type=checkbox]),dialog select { font-size:16px; }
+  .tool-row button,.qcard button,.intro-keep button,.rv-nav button { min-height:44px; }
+  .rv-foot .review-summary { max-height:3em; overflow:auto; }
+}
+
 </style>
 </head>
 <body>
@@ -603,6 +614,7 @@ footer.ft { max-width: 1240px; margin: 0 auto; padding: 18px 20px 40px; color: v
   </div>
 </div>
 <nav aria-label="進み具合"><ol class="steps" id="steps"></ol></nav>
+<div id="save-warning" role="alert" hidden>この変更は端末に保存できていません。タブを閉じる前に作業ファイルを保存してください。 <button type="button" class="btn sm" data-act="work-save">作業ファイルを保存</button></div>
 <main id="view" tabindex="-1">
   <noscript><p class="err">このツールは JavaScript を使って、この端末の中だけで動きます。JavaScript を有効にしてください。</p></noscript>
 </main>
@@ -1168,7 +1180,8 @@ TG.decode = function (buf) {
 };
 
 /* CSVの文法（RFC 4180）：引用符、引用符の中のカンマ・改行、"" のエスケープ、CRLF/LF/CR */
-TG.parseCSV = function (text, delim) {
+TG.parseCSV = function (text, delim, strict) {
+  var opening = 0;
   var rows = [], row = [], field = '', i = 0, n = text.length, inQ = false, quoted = false;
   delim = delim || ',';
   while (i < n) {
@@ -1180,7 +1193,7 @@ TG.parseCSV = function (text, delim) {
       }
       field += c; i++; continue;
     }
-    if (c === '"' && field === '' && !quoted) { inQ = true; quoted = true; i++; continue; }
+    if (c === '"' && field === '' && !quoted) { opening = i; inQ = true; quoted = true; i++; continue; }
     if (c === delim) { row.push(field); field = ''; quoted = false; i++; continue; }
     if (c === '\r' || c === '\n') {
       row.push(field); rows.push(row); row = []; field = ''; quoted = false;
@@ -1188,6 +1201,7 @@ TG.parseCSV = function (text, delim) {
     }
     field += c; i++;
   }
+  if (strict && inQ) throw new Error('元ファイルの'+text.slice(0,opening).split(/\r\n|\r|\n/).length+'行目から始まる引用符が閉じていません。元ファイルでそのセルを確認してください。');
   if (field !== '' || row.length || quoted) { row.push(field); rows.push(row); }
   return rows;
 };
@@ -1209,18 +1223,22 @@ TG.detectDelim = function (text) {
 };
 
 /* 日付：2026/9/1、2026-09-01、2026年9月1日、20260901、R8.9.1、令和8年9月1日、26/09/01、9/1（年なし） */
-TG.parseDate = function (s) {
+TG.parseDate = function (s, order) {
   var t = TG.readable(s).replace(/\s+/g, '');
   if (!t) return null;
   var m, y = null, mo, d, noYear = false;
-  if ((m = t.match(/^(令和|平成|R|H)(元|\d{1,2})[年.\/\-](\d{1,2})[月.\/\-](\d{1,2})日?/i))) {
+  t = t.replace(/(?:\([日月火水木金土]\)|T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?Z?)$/i,'');
+  if ((m = t.match(/^(令和|平成|R|H)(元|\d{1,2})[年.\/\-](\d{1,2})[月.\/\-](\d{1,2})日?$/i))) {
     y = (/^(令和|R)$/i.test(m[1]) ? 2018 : 1988) + (m[2] === '元' ? 1 : +m[2]); mo = +m[3]; d = +m[4];
-  } else if ((m = t.match(/^(\d{4})[年.\/\-](\d{1,2})[月.\/\-](\d{1,2})日?/))) {
+  } else if ((m = t.match(/^(\d{4})[年.\/\-](\d{1,2})[月.\/\-](\d{1,2})日?$/))) {
     y = +m[1]; mo = +m[2]; d = +m[3];
-  } else if ((m = t.match(/^(\d{4})(\d{2})(\d{2})(?!\d)/))) {
+  } else if ((m = t.match(/^(\d{4})(\d{2})(\d{2})$/))) {
     y = +m[1]; mo = +m[2]; d = +m[3];
-  } else if ((m = t.match(/^(\d{2})[.\/\-](\d{1,2})[.\/\-](\d{1,2})(?!\d)/))) {
-    y = 2000 + (+m[1]); mo = +m[2]; d = +m[3];
+  } else if ((m = t.match(/^(\d{2})[.\/\-](\d{1,2})[.\/\-](\d{1,2})$/))) {
+    if (!order && +m[1] <= 12) return null;
+    if (order === 'mdy' || order === 'dmy') {
+      y = 2000 + (+m[3]); mo = +(order === 'mdy' ? m[1] : m[2]); d = +(order === 'mdy' ? m[2] : m[1]);
+    } else { y = 2000 + (+m[1]); mo = +m[2]; d = +m[3]; }
   } else if ((m = t.match(/^(\d{1,2})[月.\/\-](\d{1,2})日?$/))) {
     mo = +m[1]; d = +m[2]; noYear = true;
   } else return null;
@@ -1254,7 +1272,9 @@ TG.parseAmount = function (s) {
   t = t.replace(/^(¥|\\|JPY)/i, '');
   if (/^[-−]/.test(t)) { neg = !neg; t = t.slice(1); }
   if (/[-−]$/.test(t)) { neg = !neg; t = t.slice(0, -1); }
-  t = t.replace(/(円|JPY|YEN)$/i, '').replace(/,/g, '');
+  t = t.replace(/(円|JPY|YEN)$/i, '');
+  if (t.includes(',') && !/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(t)) return {ok:false};
+  t = t.replace(/,/g, '');
   if (!/^\d+(\.\d+)?$/.test(t)) return { ok: false };
   var v = parseFloat(t);
   return { ok: true, value: neg ? -v : v, decorated: !/^-?\d+$/.test(raw.trim().replace(/,/g, '')) };
@@ -1355,6 +1375,7 @@ TG.assignHeaderRoles = function (cells) {
   var roles = { date: -1, desc: -1, amount: -1, out: -1, in: -1, balance: -1, dir: -1, notes: [] };
   var used = {};
   var pick = function (role) {
+    if (roles[role]>=0) return;
     var bestJ = -1, bestQ = 0;
     cand.forEach(function (list, j) {
       if (used[j]) return;
@@ -1362,6 +1383,8 @@ TG.assignHeaderRoles = function (cells) {
     });
     if (bestJ >= 0) { roles[role] = bestJ; used[bestJ] = 1; }
   };
+  var yenColumn=cells.findIndex(function(v){return /円換算額|円換算金額|日本円金額|請求額[（(]円[）)]/.test(v);});
+  if (yenColumn>=0) {roles.amount=yenColumn; used[yenColumn]=1;}
   pick('date'); pick('in'); pick('balance'); pick('dir');
   /* 「お支払金額」は、入金の列があれば出金、なければ金額として扱う */
   if (roles['in'] >= 0) { pick('out'); pick('amount'); } else { pick('amount'); pick('out'); }
@@ -1463,7 +1486,7 @@ TG.buildRows = function (rows, an, opts) {
     var row = rows[i];
     if (!row || row.join('').trim() === '') { blank++; continue; }
     var rawDate = cell(row, r.date), rawDesc = cell(row, r.desc);
-    var pd = TG.parseDate(rawDate);
+    var pd = TG.parseDate(rawDate,opts.dateOrder);
     var isSummary = (!pd) && (TG.SUMMARY_ROW.test(TG.readable(rawDesc)) || TG.SUMMARY_ROW.test(TG.readable(rawDate)));
     var item = { line: i + 1, cells: row.slice(), raw: { date: rawDate, desc: rawDesc, amount: '' }, pd: pd, notesText: noteCols.map(function (j) { return cell(row, j); }).filter(function (v) { return v && !/^[0-9.,\-\s]+$/.test(v); }).join(' ') };
     item.itemNotes = itemNoteCols.map(function (j) { return cell(row, j); }).filter(Boolean);
@@ -1488,6 +1511,15 @@ TG.buildRows = function (rows, an, opts) {
     if (isSummary) { summary.push(item); continue; }
     out.push(item);
   }
+  var currencyColumn=(an.header||[]).findIndex(function(v){return /^(通貨|通貨コード|現地通貨|currency(?: code)?)$/i.test(String(v).trim());});
+  out.forEach(function(item){
+    var col = an.mode==='single' ? r.amount : item.fromIn ? r['in'] : r.out;
+    var heading = String((an.header||[])[col]||'').toUpperCase();
+    var unitText=heading+' '+item.raw.amount;
+    if (currencyColumn>=0 && !/円換算|日本円|JPY|[（(]円[）)]/.test(heading)) unitText+=' '+String(item.cells[currencyColumn]||'').toUpperCase();
+    var code = unitText.match(/\b(USD|EUR|GBP|AUD|CAD|NZD|CNY|HKD|TWD|KRW|SGD|CHF|THB|INR)\b|米ドル|ユーロ|外貨/);
+    if (code) { item.currency=code[0]; item.amount=null; item.amountBad='円換算額がありません（'+item.currency+'）'; }
+  });
   var total = TG.trailingTotal(out, rows, an);
   if (total) {
     var footer = out.pop();
@@ -1553,7 +1585,16 @@ TG.buildRows = function (rows, an, opts) {
   out.forEach(function (it) { if (it.pd && it.pd.y !== null) years[it.pd.y] = (years[it.pd.y] || 0) + 1; });
   var yh = new Date().getFullYear(), yn = 0;
   Object.keys(years).forEach(function (y) { if (years[y] > yn) { yn = years[y]; yh = +y; } });
-  out.forEach(function (it, k) { it.date = TG.dateInfo(it.pd, yh); it.idx = k; });
+  var previous=null, inferredYear=+opts.startYear || yh;
+  out.forEach(function (it,k) {
+    if (it.pd) {
+      if (it.pd.y!==null) inferredYear=it.pd.y;
+      else if(previous && previous.m>=10 && it.pd.m<=3) inferredYear++;
+      else if(previous && previous.m<=3 && it.pd.m>=10) inferredYear--;
+      previous=it.pd;
+    }
+    it.date=TG.dateInfo(it.pd,inferredYear); it.idx=k;
+  });
   return { rows: out, blank: blank, summary: summary, posIsOut: posIsOut };
 };
 
@@ -1570,7 +1611,7 @@ TG.readText = function (rawText, name, encoding, opts, source) {
   var dec = { encoding: encoding };
   var text = String(rawText || '').replace(/^﻿/, '');
   var delim = source && source.kind === 'xlsx' ? ',' : TG.detectDelim(text);
-  var table = TG.parseCSV(text, delim);
+  var table = TG.parseCSV(text, delim, true);
   var an = TG.analyzeTable(table, source);
   if (opts && opts.roles) {
     an.roles = opts.roles; an.mode = (an.roles.out >= 0 || an.roles['in'] >= 0) && an.roles.amount < 0 ? 'split' : 'single'; an.confidence = 'user';
@@ -1887,7 +1928,7 @@ TG.xlsxCell = function (attrs, inner, ctx, info) {
 };
 
 /* .xlsx → { text: CSVの文字列, sheet: シート名, notes: [読み込みの説明] } */
-TG.readXlsx = function (buf, entries) {
+TG.readXlsx = function (buf, entries, chooseSheet) {
   entries = entries || TG.zipEntries(buf);
   var byName = {};
   entries.forEach(function (e) { byName[e.name.toLowerCase().replace(/^\/+/, '')] = e; });
@@ -1939,13 +1980,28 @@ TG.readXlsx = function (buf, entries) {
           return { text: TG.tableToCsv(t.rows), sheet: sheets[k].name, notes: notes, rowNumbers: t.rowNumbers, columns: t.columns };
         });
       };
+      if (sheets.length>1 && chooseSheet) {
+        async function previewSheets(){
+          var previews=[];
+          for(var sh of sheets){
+            var xml=await part(sh.path),data=xml && TG.xlsxSheetTable(xml,ctx);
+            previews.push({name:sh.name,preview:data && data.rows.length ? data.rows.slice(0,2).map(function(row){return row.filter(Boolean).slice(0,4).join('　');}).join(' ／ ') : '値のある行がありません'});
+          }
+          return previews;
+        }
+        return previewSheets().then(chooseSheet).then(function(index){
+          if (index==null) throw TG.fileError('xlsxbad','（選択を取り消しました。）');
+          if (!Number.isInteger(index)||!sheets[index]) throw TG.fileError('xlsxbad');
+          sheets=[sheets[index]]; return tryAt(0);
+        });
+      }
       return tryAt(0);
     });
   });
 };
 
 /* ファイル（ArrayBuffer）→ { text, encoding, source }。読めない種類は、案内の文を持つエラーにする */
-TG.openFile = function (buf, name) {
+TG.openFile = function (buf, name, chooseSheet) {
   var kind = TG.sniffFile(buf), ext = (/\.([A-Za-z0-9]+)$/.exec(String(name || '')) || [])[1];
   ext = ext ? ext.toLowerCase() : '';
   if (kind === 'zip') {
@@ -1953,7 +2009,7 @@ TG.openFile = function (buf, name) {
     try { entries = TG.zipEntries(buf); } catch (e) { return Promise.reject(TG.fileError(/^xls/.test(ext) ? 'xlsxbad' : 'archive')); }
     var zk = TG.zipKind(buf, entries);
     if (zk.kind !== 'xlsx') return Promise.reject(TG.fileError(zk.kind, zk.detail));
-    return TG.readXlsx(buf, entries).then(function (x) {
+    return TG.readXlsx(buf, entries, chooseSheet).then(function (x) {
       return { text: x.text, encoding: 'Excel（.xlsx）', source: { kind: 'xlsx', sheet: x.sheet, notes: x.notes, rowNumbers: x.rowNumbers, columns: x.columns } };
     }, function (e) { throw e && e.guide ? e : TG.fileError('xlsxbad', e && e.message ? '（' + e.message + '）' : ''); });
   }
@@ -1966,6 +2022,11 @@ TG.openFile = function (buf, name) {
 
 /* 読み込んだ結果を、仕分けの前に確かめる（止めるときは理由の文を返す） */
 TG.checkStatement = function (st, name) {
+  var conflict = st.rows.find(function(row){
+    var a=TG.parseAmount(row.rawOut), b=TG.parseAmount(row.rawIn);
+    return a && a.ok && a.value && b && b.ok && b.value;
+  });
+  if (conflict) return '元明細'+conflict.line+'行目に出金「'+conflict.rawOut+'」と入金「'+conflict.rawIn+'」の両方があります。元の2つの金額を確認し、取引ごとに分けてから読み込んでください。';
   var n = st.rows.length;
   if (!n) return '「' + name + '」から明細の行が見つかりませんでした（' + (st.table.length ? st.table.length + '行を読みましたが、日付・摘要・金額のそろった行がありません' : '中身が空です') + '）。明細のCSVかどうか、中身を確かめてください。';
   var bad = 0;
@@ -2469,7 +2530,7 @@ TG.markDuplicates = function (rows, res) {
       var spaceOnly = others.some(function (j) { return rows[j].raw.desc !== rows[i].raw.desc; });
       res[i].dup = others;
       res[i].dupLines = lines;
-      res[i].notes.push({ kind: 'dup', text: '元明細の' + TG.lineList(lines) + 'は、同じ日・店・金額です' + (spaceOnly ? '（摘要は空白の違いだけ）' : '') + '。2回の利用か二重の請求かは、カード会社の明細で確かめられます。どちらの行も消さずに残しています。', short: '重複の可能性' });
+      res[i].notes.push({ kind: 'dup', text: '元明細の' + TG.lineList(lines) + 'は、同じ日・店・金額です' + (spaceOnly ? '（摘要は空白の違いだけ）' : '') + (g.length===2 ? '。2回の利用か二重の請求かは、カード会社の明細で確かめられます。どちらの行も消さずに残しています。' : '。同条件の明細が'+g.length+'件あります。利用詳細と照合できた元行だけを確定してください。すべての行を残しています。'), short: '重複の可能性' });
     });
   });
 };
@@ -2804,7 +2865,7 @@ TG.decideTable = function (row, r, pp, desc) {
     } else if (L.link === 'related') {
       var gap = r.lbl ? '専門書かどうかは明細の表記からの推定です。仕事の資料として買った本か、確かめてください。' : '仕事で使ったかは、明細だけでは分かりません。';
       TG.set(r, 'ask', 'table', s.label + 'に関連。今回の用途は不明', profile + readType + gap);
-      r.pro.push(TG.NATURE_LABEL.work + '：' + lbl); r.pro.push('関係しそうな記述：' + TG.Q(s)); r.facts.push('プロフィールに' + t.label + 'の記述がない');
+      r.pro.push(TG.NATURE_LABEL.work + '：' + lbl); r.pro.push('関係しそうな記述：' + TG.Q(s)); r.facts.push('この支払いをその仕事で使ったかは、明細から分かりません');
     } else {
       TG.set(r, 'ask', 'table', '仕事とのつながりを確認', readType + 'プロフィールには、副業で使っているかの記載がありません。');
       r.pro.push(TG.NATURE_LABEL.work + '：' + lbl); r.facts.push('プロフィールに関係する記述がない');
@@ -2837,7 +2898,7 @@ TG.decideTable = function (row, r, pp, desc) {
     r.con.push(TG.NATURE_LABEL.life + '：' + lbl); r.pro.push('つながりの弱い記述：' + TG.Q(s));
   } else {
     /* 私用候補にする根拠は「日常の支払いに多い種類」であること（記載がないことではない） */
-    TG.set(r, 'pvt', 'table', '日常の支払いに多く、副業とのつながりは未記載', readType + '日常の支払いに多い種類なので、私用候補にしました。プロフィールに、仕事で使うという記載もありません。');
+    TG.set(r, 'pvt', 'table', '日常の支払いに多い種類。今回の使い道を確認', readType + '日常の支払いに多い種類なので、私用候補にしました。仕事のために支払った場合は、何に使ったかを確かめて事業を選べます。');
     r.con.push(TG.NATURE_LABEL.life + '：' + lbl); r.facts.push('プロフィールに関係する記述がない');
   }
   return true;
@@ -3123,9 +3184,13 @@ TG.defaultState = function () {
     exported: null
   };
 };
-TG.load = function () {
+// 練習はこのタブのセッション、本番はこのブラウザの保存領域を使う。
+TG.practice = false;
+TG.persistence = function () { return TG.practice ? window.sessionStorage : window.localStorage; };
+TG.load = function (remember) {
   try {
-    var t = window.localStorage.getItem(TG.KEY);
+    var t = TG.persistence().getItem(TG.KEY);
+    if (remember !== false) TG.savedBase = t;
     if (t) {
       var s = JSON.parse(t);
       if (s && s.v === 1) {
@@ -3182,15 +3247,77 @@ TG.migrate = function (d) {
   }
   return d;
 };
+// 同じ元明細の別行は統合。同じ行・列設定・明細そのものが競合した場合は選択を求める。
+TG.mergeSaved = function (base, local, remote) {
+  var eq = function (a,b) { return JSON.stringify(a) === JSON.stringify(b); };
+  function choose(label,a,b) { return window.confirm(label + 'が別タブでも変更されました。このタブの内容を使いますか？ キャンセルで別タブの内容を使います。') ? a : b; }
+  function merge(a,b,c,label) {
+    if (eq(c,a) || eq(b,c)) return b;
+    if (eq(a,b)) return c;
+    return choose(label,b,c);
+  }
+  function map(a,b,c,label) {
+    var result = {};
+    new Set(Object.keys(a||{}).concat(Object.keys(b||{}),Object.keys(c||{}))).forEach(function (k) {
+      var v = merge((a||{})[k],(b||{})[k],(c||{})[k],label+' '+k);
+      if (v !== undefined) result[k] = v;
+    });
+    return result;
+  }
+  function signature(s) { return s.ds && [s.ds.id,s.ds.opts,s.ds.includeSummary]; }
+  if (!eq(signature(local),signature(remote))) {
+    if (eq(local,base)) return remote;
+    return choose('作業中の明細または読み取り方',local,remote);
+  }
+  var out = Object.assign({}, remote, local);
+  ['dec','purchaseDetails','answers','profile','skipTopics'].forEach(function(k){ out[k]=map(base[k],local[k],remote[k],k==='dec'?'確定区分・メモ':k); });
+  if (local.ds) {
+    out.ds=Object.assign({},local.ds);
+    ['transitHeld','deferred'].forEach(function(k){
+      out.ds[k]=map(base.ds&&base.ds[k],local.ds[k],remote.ds[k],'保留');
+    });
+    out.ds.questionsUsed=Math.max(local.ds.questionsUsed||0,remote.ds.questionsUsed||0);
+  }
+  function ruleMap(rules) { var m={}; (rules||[]).forEach(function(r){ m[r.datasetId+'|'+r.key]=r; }); return m; }
+  out.rules=Object.values(map(ruleMap(base.rules),ruleMap(local.rules),ruleMap(remote.rules),'覚えた店'));
+  out.exported=merge(base.exported,local.exported,remote.exported,'出力の記録');
+  return out;
+};
 TG._saveTimer = null;
 TG.save = function (now) {
-  var run = function () { TG._saveTimer = null; try { window.localStorage.setItem(TG.KEY, JSON.stringify(TG.S)); TG.storageError = false; } catch (e) { TG.storageError = true; } };
+  var practice = TG.practice;
+  TG.savePending=true;
+  function persist() {
+    if (practice !== TG.practice) return;
+    try {
+      var store = TG.persistence(), current = store.getItem(TG.KEY);
+      if (TG.savedBase !== undefined && current !== TG.savedBase) {
+        var base = TG.savedBase ? JSON.parse(TG.savedBase) : TG.defaultState();
+        var incoming = current ? JSON.parse(current) : TG.defaultState();
+        var merged = TG.mergeSaved(base, TG.S, incoming);
+        Object.keys(TG.S).forEach(function (k) { if (!(k in merged)) delete TG.S[k]; });
+        Object.assign(TG.S, merged);
+        TG.recompute();
+        if (TG.afterMerge) TG.afterMerge();
+      }
+      var next = JSON.stringify(TG.S);
+      store.setItem(TG.KEY, next); TG.savedBase = next; TG.savePending=false;
+      TG.storageError = false;
+    } catch (e) { TG.storageError = true; }
+    if (TG.storageNotice) TG.storageNotice();
+  }
+  var run = function () {
+    TG._saveTimer = null;
+    if (!practice && window.navigator && window.navigator.locks && !TG.leaving) {
+      window.navigator.locks.request(TG.KEY, persist).catch(function () { TG.storageError = true; if (TG.storageNotice) TG.storageNotice(); });
+    } else persist();
+  };
   clearTimeout(TG._saveTimer);
   if (now) run(); else TG._saveTimer = setTimeout(run, 250);
 };
 TG.clearAll = function () {
   clearTimeout(TG._saveTimer); TG._saveTimer = null;
-  try { window.localStorage.removeItem(TG.KEY); } catch (e) { /* 消せなくても画面の状態は初期化する */ }
+  try { TG.persistence().removeItem(TG.KEY); TG.savedBase = null; } catch (e) { /* 消せなくても画面の状態は初期化する */ }
   TG.S = TG.defaultState(); TG.D = {};
 };
 
@@ -3212,7 +3339,7 @@ TG.recompute = function () {
   /* 今の明細での確定・記入は渡さない（ツール仕分けは最初の判定のまま） */
   var ctx = { datasetId: S.ds.id, rules: S.useRules ? S.rules : [] };
   D.res = TG.classifyAll(rows, D.pp, ctx);
-  D.topics = TG.topicQuestions(rows, D.res, S.profile, S.answers, ctx, S.skipTopics);
+  D.topics = TG.topicQuestions(rows, D.res, S.profile, S.answers, ctx, S.skipTopics).slice(0, Math.max(0,TG.MAX_TOPIC_QUESTIONS-(S.ds.questionsUsed||0)));
   D.byKey = {}; rows.forEach(function (r, i) { D.byKey[r.key] = i; });
   D.tally = TG.tally(rows, D.res, S.dec);
   return D;
@@ -3225,9 +3352,9 @@ TG.setPurchaseDraft = function (key, item, memo) {
   item = String(item == null ? '' : item).trim();
   memo = String(memo == null ? '' : memo);
   var prev = S.purchaseDetails[key] || {};
-  if ((prev.item || '') === item && (prev.memoDraft || '') === memo) return false;
   /* 記入欄は店名だけの明細に出す。ほかの行は、以前の版で書いた品名の下書きがあるときだけ直せる */
-  if (!D.res[i].needsPurchaseDetails && !prev.item) return false;
+  if (!D.res[i].needsPurchaseDetails && !prev.item) item = '';
+  if ((prev.item || '') === item && (prev.memoDraft || '') === memo) return false;
   if (item || memo) {
     S.purchaseDetails[key] = { item: item };
     if (memo) S.purchaseDetails[key].memoDraft = memo;
@@ -3245,7 +3372,7 @@ TG.decideRow = function (key, final, memo, via, item) {
     delete S.dec[key];
     TG.ruleRemove(key);
     /* 未確認に戻しても、書いた購入品とメモは下書きとして残す */
-    if (prev && ((prev.purchase && prev.purchase.item) || prev.memo) && result && result.needsPurchaseDetails) {
+    if (prev && ((prev.purchase && prev.purchase.item) || prev.memo) && result) {
       S.purchaseDetails[key] = { item: (prev.purchase && prev.purchase.item) || '' };
       if (prev.memo) S.purchaseDetails[key].memoDraft = prev.memo;
     }
@@ -3261,6 +3388,7 @@ TG.decideRow = function (key, final, memo, via, item) {
   var decision = S.dec[key] = { final: final, memo: memo == null ? previousMemo : String(memo), at: Date.now(), via: via || 'card' };
   if (item) decision.purchase = { item: item };
   delete S.purchaseDetails[key];
+  if (S.ds && S.ds.deferred) delete S.ds.deferred[key];
   if (S.ds && S.ds.transitHeld) delete S.ds.transitHeld[key];
   TG.ruleUpsert(key, final, decision.memo);
   return true;
@@ -3371,15 +3499,16 @@ TG.SAMPLE = {
   }
   function dateLbl(row) { return row.date ? row.date.m + '/' + row.date.d + '（' + row.date.wd + '）' : esc(row.raw.date || '日付なし'); }
   function dateFull(row) { return row.date ? row.date.y + '年' + row.date.m + '月' + row.date.d + '日（' + row.date.wd + '）' : '日付を読み取れません（元の値：' + esc(row.raw.date || '空欄') + '）'; }
-  function amt(row) { return row.amount === null || row.amount === undefined ? '金額不明' : TG.yen(row.amount); }
+  function amt(row) { if(row.currency) return esc(row.raw.amount)+' '+esc(row.currency); return row.amount === null || row.amount === undefined ? '金額不明' : TG.yen(row.amount); }
+  function amountWithUnit(row) { return amt(row)+(row.amount==null || row.currency?'':'円'); }
   function rowNotesHtml(row) {
     var notes = TG.purchaseNotes(row).map(TG.reasonExcerpt).join(' ／ ');
     if (!notes) return '';
     if (notes.length > 100) return '<details class="source-note"><summary>元明細の補足を読む</summary>' + esc(notes) + '</details>';
     return '<p class="source-note"><b>元明細の補足</b> ' + esc(notes) + '</p>';
   }
-  function toast(msg) {
-    var z = $('#toasts'); if (!z) return;
+  function toast(msg,inline) {
+    var z = (inline && $('.bd-file')) || $('#toasts'); if (!z) return;
     /* 前の知らせは置き換える（続けて操作したときに積み重ならないように） */
     $$('.toast', z).forEach(function (x) { x.remove(); });
     var t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; z.appendChild(t);
@@ -3394,14 +3523,21 @@ TG.SAMPLE = {
     D.rows.forEach(function (row, i) { if (before[row.key] && before[row.key] !== D.res[i].cat) { moved[row.key] = 1; n++; to[D.res[i].cat]++; } });
     TG.moved = moved;
     setTimeout(function () { TG.moved = null; }, 2600);
-    return { n: n, to: to };
+    return { n: n, to: to, confirmed:Object.keys(moved).filter(function(k){return !!S.dec[k];}).length };
   }
   function movedText(m) {
     if (!m.n) return '区分の変わった明細はありませんでした（理由に反映しました）。';
-    return m.n + '件の区分が変わりました（' + ['biz', 'ask', 'pvt'].filter(function (c) { return m.to[c]; }).map(function (c) { return TG.CAT[c].label + 'へ' + m.to[c] + '件'; }).join('・') + '）。確定済みの区分はそのままです。';
+    return m.n + '件の区分が変わりました（' + ['biz', 'ask', 'pvt'].filter(function (c) { return m.to[c]; }).map(function (c) { return TG.CAT[c].label + 'へ' + m.to[c] + '件'; }).join('・') + '）。このうち確定済み '+m.confirmed+'件。本人の確定は保持します。';
   }
 
   /* ---------- 全体 ---------- */
+  function endPractice() {
+    clearTimeout(TG._saveTimer); TG._saveTimer=null;
+    sessionStorage.removeItem('tegakari.practice'); sessionStorage.removeItem(TG.KEY);
+    TG.practice=false; TG.S=S=TG.load(); TG.D=D={}; TG.recompute(); D=TG.D;
+    if (!S.ds) S.view='profile';
+    lastExportCsv=null;
+  }
   function render() {
     renderHeader(); renderSteps();
     var v = $('#view');
@@ -3415,9 +3551,11 @@ TG.SAMPLE = {
       $('#ride-time').value = rideSearch.time;
       filterRidePairs(search);
     }
-    renderFooter();
+    if (TG.practice) v.insertAdjacentHTML('afterbegin','<div class="practice-bar">サンプルで練習中　<button class="btn sm" data-act="sample-end">自分の明細に戻る</button></div>');
+    renderFooter(); TG.storageNotice && TG.storageNotice();
   }
-  function go(view, focusTop) {
+  function go(view, focusTop, fromHistory) {
+    if (!fromHistory && view!==S.view) {try {history.pushState({tegakari:view},'');}catch(e){}}
     if (S.ds && S.view === 'profile' && (view === 'export' || view === 'statement')) { TG.recompute(); D = TG.D; }
     S.view = view; save(); render();
     window.scrollTo(0, 0);
@@ -3443,7 +3581,7 @@ TG.SAMPLE = {
   function renderFooter() {
     $('#ft').innerHTML = '<span>てがかり仕分け — 明細とプロフィールは、この端末のブラウザの中だけで扱います（外部への通信なし）。</span>' +
       (TG.storageError ? '<span>この端末に保存できない設定のため、ページを閉じると内容は消えます。</span>' : '<span>入力と確定の内容は、このブラウザに保存されます。</span>') +
-      '<button class="btn link" data-go="intro">使い方（はじめに）</button><button class="btn link" data-act="privacy">データの扱い・記録を消す</button>';
+      (S.ds?'<button class="btn link" data-act="work-save">作業ファイルを保存</button>':'') + '<button class="btn link" data-go="intro">使い方（はじめに）</button><button class="btn link" data-act="privacy">データの扱い・記録を消す</button>';
   }
 
   /* ---------- 案内（初めて開いたとき）：何ができるか・流れ・出来上がるCSV ---------- */
@@ -3461,7 +3599,7 @@ TG.SAMPLE = {
         var i = res.map(function (r) { return r.cat; }).indexOf(c);
         if (i < 0) return '';
         var row = st.rows[i];
-        return '<li class="ix ' + c + '"><span class="ix-row"><span class="cd num">' + dateLbl(row) + '</span><span class="cn">' + esc(row.raw.desc) + '</span><span class="ca num">' + amt(row) + '円</span></span>' +
+        return '<li class="ix ' + c + '"><span class="ix-row"><span class="cd num">' + dateLbl(row) + '</span><span class="cn">' + esc(row.raw.desc) + '</span><span class="ca num">' + amountWithUnit(row) + '</span></span>' +
           '<span class="ix-out">' + catChip(c) + '<span class="cw">' + esc(res[i].short) + '</span></span></li>';
       }).join('');
     } catch (e) { introCache = ''; }
@@ -3479,7 +3617,7 @@ TG.SAMPLE = {
       '<div class="intro-cta">' + (resume || '<button type="button" class="btn primary big" id="intro-start" data-go="profile">はじめる' + IC.arrowR + '</button>') +
       '<button type="button" class="btn big" data-act="sample">サンプルで試す</button>' + (resume ? '<button type="button" class="btn link" id="intro-start" data-go="profile">プロフィールから見直す</button>' : '') + '</div>' +
       '<p class="hint intro-sample">サンプルは配布の架空データ（ライターのプロフィールと、カード明細40件）です。</p>' +
-      '<p class="hint intro-keep">別のパソコンや去年の続きから始めるときは、<button type="button" class="btn link" data-act="backup-load">引き継ぎファイルを読み込む</button><input type="file" id="backup-file-v" class="sr" accept=".json,application/json" tabindex="-1" aria-hidden="true"></p>' +
+      '<p class="hint intro-keep">作業の続き、プロフィールと覚えた店を読み込むときは、<button type="button" class="btn link" data-act="backup-load">引き継ぎファイルを読み込む（作業ファイルも可）</button><input type="file" id="backup-file-v" class="sr" accept=".json,application/json" tabindex="-1" aria-hidden="true"></p>' +
       '<p class="intro-safe">' + IC.lock + '<span>明細とプロフィールは、この端末のブラウザの中だけで扱います。外部には送りません。</span></p></div>' +
       (examples ? '<figure class="intro-demo"><figcaption>仕分けの例（サンプルの明細から）</figcaption><ul>' + examples + '</ul><p class="hint">最終区分は「事業」か「私用」。決めるのはあなたです。</p></figure>' : '') + '</div>' +
       '<h2 class="intro-h2">4つの手順で終わります</h2><ol class="intro-steps">' +
@@ -3597,18 +3735,33 @@ TG.SAMPLE = {
   /* force：「サンプルで試す」で、置き換えの確認を済ませてから読み込むとき */
   async function handleFile(file, force) {
     if (!file) return;
+
     var request = ++fileRequest;
     if (file.size > 15 * 1024 * 1024) { fileFail(TG.FILE_MESSAGES.big, true); return; }
     try {
       var buf = await (file.arrayBuffer ? file.arrayBuffer() : new Promise(function (ok, ng) { var fr = new FileReader(); fr.onload = function () { ok(fr.result); }; fr.onerror = ng; fr.readAsArrayBuffer(file); }));
       if (request !== fileRequest) return;
       /* ファイルの種類を見分ける（PDF・画像などは、ここで案内を出して止める）。Excel は CSV の文字列に直す */
-      var dec = await TG.openFile(buf, file.name);
+      var dec = await TG.openFile(buf, file.name, function(sheets){
+        return new Promise(function(resolve){
+          var body='<div class="dlg-b"><p>読み込むシートを選んでください。</p>'+sheets.map(function(sh,i){return '<p><button class="btn" data-sheet="'+i+'">'+esc(sh.name)+'</button> '+esc(sh.preview.slice(0,160))+'</p>';}).join('')+'</div>';
+          var dlg=openDlg('dlg-sheet','Excelのシートを選ぶ',body,'',{raw:true,onClose:function(){resolve(null);}});
+          dlg.addEventListener('click',function(e){var b=e.target.closest('[data-sheet]');if(b){resolve(Number(b.dataset.sheet));dlg.close();}});
+        });
+      });
       if (request !== fileRequest) return;
       var st = TG.readText(dec.text, file.name, dec.encoding, {}, dec.source);
       /* 明細の行がない・日付と金額を読めない行が大半・行が多すぎるときは、仕分けの前で止める */
       var stop = TG.checkStatement(st, file.name);
       if (stop) { fileFail(stop, true); return; }
+      if (st.table[0] && JSON.stringify(st.table[0])===JSON.stringify(TG.CSV_HEADER)) {
+        var proceed=await new Promise(function(resolve){
+          var body='<div class="dlg-b"><p>保存済みの区分と理由を点検できます。新規に仕分けると、これらの区分は引き継ぎません。</p><details open><summary>保存した結果 '+(st.table.length-1)+'件</summary><div class="tbl-wrap"><table class="pv"><thead><tr>'+TG.CSV_HEADER.map(function(h){return '<th>'+esc(h)+'</th>';}).join('')+'</tr></thead><tbody>'+st.table.slice(1).map(function(row){return '<tr>'+row.map(function(v){return '<td>'+esc(v)+'</td>';}).join('')+'</tr>';}).join('')+'</tbody></table></div></details></div>';
+          var dlg=openDlg('dlg-result-file','仕分け済みCSVの点検',body,'<div class="dlg-f"><button class="btn" data-act="close" data-dlg="dlg-result-file">点検を終える</button><button class="btn" id="fresh-result">新規に仕分ける</button></div>',{raw:true,onClose:function(){resolve(false);}});
+          $('#fresh-result',dlg).onclick=function(){resolve(true);dlg.close();};
+        });
+        if (!proceed || request!==fileRequest) return;
+      }
       function replace() {
         if (request !== fileRequest) return;
         lastExportCsv = null;
@@ -3617,17 +3770,18 @@ TG.SAMPLE = {
         S.dec = {}; S.purchaseDetails = {}; S.skipTopics = {}; S.exported = null; S.lane = 'ask';
         TG.hl = null;
         TG.recompute(); D = TG.D;
-        S.view = 'board';
-        save(true); render();
+        go('board',false);
+        save(true);
         window.scrollTo(0, 0);
         var ruled = D.res.filter(function (r) { return r.rule === 'rule'; }).length;
-        toast((S.ds.source && S.ds.source.sheet ? 'Excelのシート「' + S.ds.source.sheet + '」から、' : '') + D.rows.length + '件を読み込み、仕分けました。' + (ruled ? '覚えた店から ' + ruled + '件を候補にしています。' : ''));
+        toast((S.ds.source && S.ds.source.sheet ? 'Excelのシート「' + S.ds.source.sheet + '」から、' : '') + D.rows.length + '件を読み込み、仕分けました。' + (ruled ? '覚えた店から ' + ruled + '件を候補にしています。' : ''),true);
         if (D.st.analysis.confidence !== 'high' || D.st.analysis.signNeedsReview) openImport(true);
         else { var h = $('#view h1'); if (h) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); } }
       }
+      if (TG.practice && !force) endPractice();
       var t = D.tally;
       var hasDetails = Object.keys(S.purchaseDetails || {}).length > 0 || !!(S.ds && Object.keys(S.ds.transitHeld || {}).length);
-      if (force || !S.ds || (!t.done && !hasDetails) || await hasCurrentExport()) { replace(); return; }
+      if (force || !S.ds || (!t.done && !hasDetails) || (S.exported && S.exported.received && await hasCurrentExport())) { replace(); return; }
       if (request !== fileRequest) return;
       confirmDlg('別の明細を読み込みますか？', '今の明細（' + esc(S.ds.name) + '）は ' + t.done + '/' + t.all + '件を確定しています。続けると、この明細の確定区分・記録待ち・メモ・購入品の記入をこの画面から取り出せなくなります。', '読み込む', replace);
     } catch (e) {
@@ -3636,8 +3790,13 @@ TG.SAMPLE = {
   }
 
   /* ---------- ③ 仕分けと確認 ---------- */
+  var boardQuery='', boardLimit={biz:80,ask:80,pvt:80}, boardFile=null;
+  function searchRows(row) {
+    return !boardQuery || TG.norm([row.line,row.raw.date,row.raw.desc,row.raw.amount,(S.ds.transitHeld||{})[row.key],(S.dec[row.key]||{}).memo,(S.purchaseDetails[row.key]||{}).memoDraft,S.ds.deferred&&S.ds.deferred[row.key]?'保留':''].join(' ')).includes(TG.norm(boardQuery));
+  }
   var boardMoreOpen = false;   /* 「プロフィールの言葉で明細を強調する」を開いたままにするか（描き直しても閉じない） */
   function viewBoard() {
+    if (boardFile!==S.ds.id) { boardQuery=''; boardLimit={biz:80,ask:80,pvt:80}; boardFile=S.ds.id; }
     var t = D.tally, an = D.st.analysis;
     var fmt = an.mode === 'split' ? '銀行形式（出金・入金の2列）' : (an.roles.dir >= 0 ? '金額1列・入出金の区分列を優先' : '金額1列・' + (D.st.posIsOut ? 'プラス' : 'マイナス') + 'が支払い');
     return '<section class="view" aria-labelledby="h-bd">' +
@@ -3646,7 +3805,7 @@ TG.SAMPLE = {
       '<button type="button" class="btn link" data-act="import">読み取り方を見る</button><button type="button" class="btn link" data-act="new-file">別の明細を読み込む</button></div></div>' +
       progressHtml(t) + '</div>' +
       nextHtml() + questionHtml() +
-      '<div class="tool-row"><span class="hint">カードを押すと、理由を見て1件ずつ確定・変更できます。</span><span>' +
+      '<label class="board-search">明細を探す <input type="search" id="board-search" value="'+esc(boardQuery)+'" placeholder="店名・金額・メモ・元行番号・保留"></label><div class="tool-row"><span class="hint">カードを押すと、理由を見て1件ずつ確定・変更できます。</span><span>' +
       '<button type="button" class="toggle" data-act="only-open" aria-pressed="' + !!S.onlyOpen + '">' + IC.check + '未確認だけ表示</button> ' +
       '<button type="button" class="btn link" data-act="how">仕分けの決まり</button></span></div>' +
       /* 手がかりで明細を強調する操作は、使う人だけが開く（最初の画面の情報量を減らす） */
@@ -3720,7 +3879,7 @@ TG.SAMPLE = {
       return s && list.indexOf(s) === n;
     }).join(' ／ ');
     var finalLabel = decisionLabel(decision);
-    var body = '<div class="dlg-b ride-correction"><p>' + dateFull(from) + '　' + amt(from) + '円　' + esc(from.raw.desc) + '</p>' +
+    var body = '<div class="dlg-b ride-correction"><p>' + dateFull(from) + '　' + amountWithUnit(from) + '　' + esc(from.raw.desc) + '</p>' +
       '<p>利用詳細の元行と利用番号を照合してください。</p><dl><dt>元明細' + from.line + '行目 → 記録待ち</dt>' +
       '<dd>この行の「' + finalLabel + '」と照合メモを取り消します。</dd><dt>元明細' + to.line + '行目 → ' + finalLabel + 'で確定</dt>' +
       '<dd><label class="memo"><span>' + to.line + '行目に保存する照合メモ</span><textarea id="ride-correction-memo" rows="2" maxlength="200">' + esc(notes) + '</textarea></label></dd></dl>' +
@@ -3739,6 +3898,7 @@ TG.SAMPLE = {
       }
       if (!TG.decideRow(to.key, decision.final, memo.value, 'review')) return;
       TG.decideRow(key, null);
+      delete S.purchaseDetails[key]; // このメモは照合済みの相手の行に移した。
       S.ds.transitHeld[key] = '';
       retally(); save(true); dlg.close(); render();
       toast('元明細' + to.line + '行目を' + finalLabel + 'で確定しました。' + from.line + '行目は記録待ちです。');
@@ -3767,14 +3927,14 @@ TG.SAMPLE = {
       var first = D.rows[D.byKey[work.held[0]]], mate = matchingRide(D.byKey[first.key]);
       var pair = work.held.length === 2 && mate && mate.key === work.held[1];
       var solo = work.held.length === 1 && mate;
-      var specific = work.held.filter(function (k) { return matchingRide(D.byKey[k]); });
+      var specific = work.held.filter(function (k) { var r=D.res[D.byKey[k]];return matchingRide(D.byKey[k]) || (r.dup && r.dup.length>1 && r.rule==='transport' && r.transport==='ride'); });
       if (specific.length) {
         var compact = !direct && (pair || solo);
         var rowButtons = specific.map(function (k) {
           var row = D.rows[D.byKey[k]];
-          var other = matchingRide(D.byKey[k]), confirmed = S.dec[other.key];
+          var other = matchingRide(D.byKey[k]), confirmed = other && S.dec[other.key];
           var resumeButton = '<button type="button" class="btn sm" data-act="resume-ride" data-key="' + esc(k) + '">' +
-            (compact ? '' : dateLbl(row) + ' ' + amt(row) + '円・') + '元明細' + row.line + '行目だけ確認</button>';
+            (compact ? '' : dateLbl(row) + ' ' + amountWithUnit(row) + '・') + '元明細' + row.line + '行目だけ確認</button>';
           if (!confirmed) return resumeButton;
           return '<div class="ride-followup">' + resumeButton + '<div><p><b>元明細' + other.line + '行目の確定内容</b>　' +
             decisionLabel(confirmed) + (confirmed.memo ? '・' + esc(confirmed.memo) : '（メモなし）') + '</p>' + rideCorrectionButton(other) + '</div></div>';
@@ -3783,7 +3943,7 @@ TG.SAMPLE = {
         var choices = '<div class="trip-actions">' + rowButtons + '</div>';
         if (compact) {
           var remainingHint = S.dec[mate.key] ? '元明細' + mate.line + '行目は確認済みです。' : '';
-          hint = dateLbl(first) + ' ' + amt(first) + '円。' + (pair ? guidance + 'もう1件は記録待ちに残ります。' :
+          hint = dateLbl(first) + ' ' + amountWithUnit(first) + '。' + (pair ? guidance + 'もう1件は記録待ちに残ります。' :
             remainingHint + (remainingHint ? '利用詳細の元行と、下の確定内容を照合してください。' : first.line + '行目の利用番号が届いたら再開してください。'));
           rowChoices = choices;
         } else {
@@ -3870,26 +4030,27 @@ TG.SAMPLE = {
   }
   function laneHtml(c) {
     var t = D.tally[c], items = [], hidden = 0;
-    D.rows.forEach(function (row, i) { if (D.res[i].cat !== c) return; if (S.onlyOpen && S.dec[row.key]) { hidden++; return; } items.push(i); });
+    D.rows.forEach(function (row, i) { if (D.res[i].cat !== c || !searchRows(row)) return; if (S.onlyOpen && S.dec[row.key]) { hidden++; return; } items.push(i); });
     if (c === 'ask') items.sort(function (a, b) { return (S.dec[D.rows[a].key] ? 1 : 0) - (S.dec[D.rows[b].key] ? 1 : 0) || a - b; });
     var left = t.n - t.done;
     var btn = !t.n ? '' : (c === 'ask' ? (left ? '<button type="button" class="btn sm ask" data-act="review">1件ずつ確認</button>' : '') : '<button type="button" class="btn sm" data-act="bulk" data-cat="' + c + '">' + (left ? 'まとめて確認' : '見直す') + '</button>');
     return '<section class="lane ' + c + (S.lane === c ? ' on' : '') + '" aria-labelledby="lh-' + c + '"><header class="lane-h"><span class="li">' + IC[c] + '</span>' +
       '<h2 id="lh-' + c + '">' + TG.CAT[c].label + ' <span class="n num">' + t.n + '</span><span class="sr">件</span></h2><span class="ls">確定 ' + t.done + '/' + t.n + '</span>' + btn + '</header>' +
       '<p class="lane-d">' + LANE_DESC[c] + '</p><div class="lane-bar" aria-hidden="true"><span style="width:' + (t.n ? (t.done / t.n * 100).toFixed(1) : 0) + '%"></span></div>' +
-      '<div class="cards">' + (items.length ? items.map(cardHtml).join('') : (hidden ? '' : '<p class="lane-empty">この区分の明細はありません</p>')) + (c === 'ask' && t.n && !left ? '<p class="lane-empty">要判断はすべて確定しました</p>' : '') +
+      '<div class="cards">' + (items.length ? items.slice(0,boardLimit[c]).map(cardHtml).join('') + (items.length>boardLimit[c] ? '<button class="btn" data-act="more-cards" data-cat="'+c+'">続きを表示（残り'+(items.length-boardLimit[c])+'件）</button>' : '') : (hidden ? '' : '<p class="lane-empty">この区分の明細はありません</p>')) + (c === 'ask' && t.n && !left ? '<p class="lane-empty">要判断はすべて確定しました</p>' : '') +
       (hidden ? '<p class="lane-empty">確定済みの ' + hidden + '件は表示していません</p>' : '') + '</div></section>';
   }
   function cardHtml(i) {
     var row = D.rows[i], r = D.res[i], d = S.dec[row.key];
-    var sourceLine = purchaseDuplicateLine(row, r);
+    var sourceLine = purchaseDuplicateLine(row, r) || (boardQuery ? '元明細の'+row.line+'行目' : '');
     var notes = r.notes.filter(function (n) { return n.short; }).map(function (n) { return '<span class="note' + ((n.kind === 'dup' || n.kind === 'parse') ? '' : ' soft') + '">' + esc(n.short) + '</span>'; }).join('');
+    if (!d && S.ds.deferred && S.ds.deferred[row.key]) notes += '<span class="note">後日再開</span>';
     if (!d && heldTransit(row.key) && r.rule === 'transport') notes += '<span class="note soft">記録待ち</span>';
     if (sourceLine) notes += '<span class="note soft">' + sourceLine + '</span>';
     if (!d && S.purchaseDetails[row.key]) notes += '<span class="note soft">記入の下書きあり</span>';
     var hit = TG.hl && (r.sigIds || []).indexOf(TG.hl) >= 0;
     var status = !d && heldTransit(row.key) && r.rule === 'transport' ? '記録待ち' : '未確認';
-    var label = dateFull(row) + '、' + (row.raw.desc || '摘要なし') + '、' + (row.dir === 'in' ? '入金 ' : '') + amt(row) + '円、' + (sourceLine ? sourceLine + '、' : '') + TG.CAT[r.cat].label + '、' + r.short + '、' + (d ? decisionLabel(d) + 'で確定' : status);
+    var label = dateFull(row) + '、' + (row.raw.desc || '摘要なし') + '、' + (row.dir === 'in' ? '入金 ' : '') + amountWithUnit(row) + '、' + (sourceLine ? sourceLine + '、' : '') + TG.CAT[r.cat].label + '、' + r.short + '、' + (d ? decisionLabel(d) + 'で確定' : status);
     return '<button type="button" class="card' + (TG.moved && TG.moved[row.key] ? ' moved' : '') + (hit ? ' hit' : '') + '" data-act="open" data-key="' + row.key + '" data-state="' + (d ? 'done' : 'open') + '"' + (d ? ' data-final="' + d.final + '"' : '') + ' aria-label="' + esc(label) + '">' +
       '<span class="c1"><span class="cd num">' + dateLbl(row) + '</span><span class="cn">' + esc(row.raw.desc || '（摘要なし）') + '</span><span class="ca num">' + (row.dir === 'in' ? '<small>入金 </small>' : '') + amt(row) + '</span></span>' +
       '<span class="c2"><span class="ct">' + esc(r.typeLabel) + '</span><span class="cw">' + esc(r.short) + '</span></span>' +
@@ -3930,11 +4091,10 @@ TG.SAMPLE = {
   /* 確定前に書いた購入品とメモは、閉じたり次へ進んだりしても下書きとして残す */
   function saveDraft() {
     clearTimeout(draftTimer);
-    var form = $('#dlg-review .rv-purchase');
-    if (!form) return;
-    var key = form.getAttribute('data-key');
-    if (S.dec[key]) return;
-    TG.setPurchaseDraft(key, $('#rv-purchase-item', form).value, ($('#rv-memo') || {}).value || '');
+    var memo=$('#dlg-review #rv-memo'), R=TG.RV;
+    if(!memo || !R) return;
+    var key=R.queue[R.pos], item=$('#rv-purchase-item');
+    if (key && !S.dec[key]) TG.setPurchaseDraft(key,item ? item.value : '',memo.value);
   }
   function openReview(keys, mode, grouped) {
     TG.RV = { mode: mode, queue: keys, pos: 0, undo: [], grouped: grouped, deferred: new Set() };
@@ -3991,9 +4151,9 @@ TG.SAMPLE = {
     var recall = [];
     /* 同じ店の明細が「定期的な支払い」の行だけなら、1行にまとめる（同じ明細を2回書かない） */
     var recurringOnly = allSame.length > 0 && (r.recurring || []).length > 0 && allSame.every(function (j) { return r.recurring.indexOf(j) >= 0; });
-    if (allSame.length) recall.push((recurringOnly ? '定期的な支払い（同じ店・同じ金額）：' : '同じ店の明細：') + allSame.slice(0, 4).map(function (j) { var rw = D.rows[j], dj = S.dec[rw.key]; return dateLbl(rw) + ' ' + amt(rw) + '円（' + (dj ? TG.CAT[dj.final].final + 'で確定' : TG.CAT[D.res[j].cat].label) + '）'; }).join('、') + (allSame.length > 4 ? ' ほか' + (allSame.length - 4) + '件' : ''));
+    if (allSame.length) recall.push((recurringOnly ? '定期的な支払い（同じ店・同じ金額）：' : '同じ店の明細：') + allSame.slice(0, 4).map(function (j) { var rw = D.rows[j], dj = S.dec[rw.key]; return dateLbl(rw) + ' ' + amountWithUnit(rw) + '（' + (dj ? TG.CAT[dj.final].final + 'で確定' : TG.CAT[D.res[j].cat].label) + '）'; }).join('、') + (allSame.length > 4 ? ' ほか' + (allSame.length - 4) + '件' : ''));
     r.notes.forEach(function (n) { if (n.kind !== 'format' && !(recurringOnly && n.kind === 'recurring')) recall.push(n.text); });
-    if (r.refOf !== undefined) { var o = D.rows[r.refOf], od = S.dec[o.key]; recall.push('返金の元：' + dateLbl(o) + '「' + o.raw.desc + '」' + amt(o) + '円（' + (od ? TG.CAT[od.final].final + 'で確定' : '未確認') + '）'); }
+    if (r.refOf !== undefined) { var o = D.rows[r.refOf], od = S.dec[o.key]; recall.push('返金の元：' + dateLbl(o) + '「' + o.raw.desc + '」' + amountWithUnit(o) + '（' + (od ? TG.CAT[od.final].final + 'で確定' : '未確認') + '）'); }
     var fmtNote = r.notes.filter(function (n) { return n.kind === 'format'; }).map(function (n) { return n.text; });
     var reading = TG.hasHalfKana(row.raw.desc) ? '<div class="rv-read">読み：' + esc(TG.readable(row.raw.desc)) + '</div>' : '';
     var list = function (a) { return a.length ? '<ul>' + a.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : '<p class="none">特になし</p>'; };
@@ -4005,7 +4165,7 @@ TG.SAMPLE = {
     var memoField = '<label class="memo"><span>' + (targeted ? 'この行の照合メモ（任意・CSVに保存）' : 'メモ（任意。CSVの理由に残ります）') + '</span><input type="text" id="rv-memo" maxlength="200" value="' + esc(d ? d.memo : ((S.purchaseDetails[key] || {}).memoDraft || (heldTransit(key) ? S.ds.transitHeld[key] : ''))) + '" placeholder="' + (targeted ? '利用番号・乗車時刻・照合した用途' : row.dir === 'in' ? '入金の心当たりや照合した記録' : '何に使ったか、何を見て確かめたか') + '"></label>';
     var body = '<div class="dlg-b">' +
       '<div class="rv-item"><div class="rv-date">' + dateFull(row) + '</div><div class="rv-desc" tabindex="-1">' + esc(row.raw.desc || '（摘要なし）') + '</div>' + reading +
-      '<div class="rv-amt num">' + amt(row) + '円<small>' + inOut + (fmtNote.length ? '（元の表記：' + esc(row.raw.amount) + '）' : '') + '</small></div>' +
+      '<div class="rv-amt num">' + amountWithUnit(row) + '<small>' + inOut + (fmtNote.length ? '（元の表記：' + esc(row.raw.amount) + '）' : '') + '</small></div>' +
       '<div class="rv-tags"><span class="tag">' + esc(r.typeLabel) + '</span>' + r.notes.filter(function (n) { return n.short; }).map(function (n) {
         var label = n.short;
         if (n.kind === 'dup' && r.transport) {
@@ -4031,13 +4191,15 @@ TG.SAMPLE = {
       '</div></div></div>';
     /* キーの案内は、キーボードで操作できる画面だけに出す（スマホ幅・タッチ操作では隠す） */
     var keyTip = function (k) { return R.mode === 'queue' ? '<span class="key">（' + k + '）</span>' : ''; };
-    var question = '<p class="q" id="rv-q">' + (mate ? 'この乗車に対応する利用詳細を確かめてから、用途を選んでください。' : esc(r.question)) + '</p>';
+    var context = !mate && r.cat==='ask' ? '<p class="review-summary">'+esc(r.pro.length ? r.pro[0] : '仕事との接点は未確認です。')+'</p>' : '';
+    var question = context + '<p class="q" id="rv-q">' + (mate ? 'この乗車に対応する利用詳細を確かめてから、用途を選んでください。' : esc(r.question)) + '</p>';
     var buttons = '<div class="rv-btns" role="group" aria-labelledby="rv-q"><button type="button" class="btn biz" data-act="rv-decide" data-final="biz" aria-pressed="' + (!!d && d.final === 'biz') + '">事業<small>' + bizSub + keyTip(mate ? '←・Enter' : '←') + '</small></button>' +
       '<button type="button" class="btn pvt" data-act="rv-decide" data-final="pvt" aria-pressed="' + (!!d && d.final === 'pvt') + '">私用<small>' + pvtSub + keyTip(mate ? '→・Enter' : '→') + '</small></button></div>';
     var nav = R.mode === 'queue'
       ? '<button type="button" class="btn" data-act="rv-prev"' + (R.pos ? '' : ' disabled') + '>前へ</button>' + (offerHold ? '' : '<button type="button" class="btn" data-act="rv-skip">あとで' + keyTip('↓') + '</button>') + (R.undo.length ? '<button type="button" class="btn" data-act="rv-undo">元に戻す' + keyTip('Z') + '</button>' : '')
       : (offerHold ? '' : (d ? '<button type="button" class="btn" data-act="rv-clear">未確認に戻す</button>' : '') + '<span class="grow"></span><button type="button" class="btn" data-act="close" data-dlg="dlg-review">' + (d ? '閉じる' : '確定せず一覧に戻る') + '</button>');
-    var foot = '<div class="dlg-f rv-foot">' + question + buttons + (nav ? '<div class="rv-nav">' + nav + '</div>' : '') + '</div>';
+    var hold = !d && r.rule!=='transport' ? '<button class="btn sm" data-act="defer-normal">保留して後日再開</button>' : '';
+    var foot = '<div class="dlg-f rv-foot">' + question + buttons + hold + (nav ? '<div class="rv-nav">' + nav + '</div>' : '') + '</div>';
     inner.innerHTML = dlgHead('dlg-review', title, meter) + body + foot;
     if (item) itemHint();
     $('.dlg-b', inner).scrollTop = 0;
@@ -4088,7 +4250,7 @@ TG.SAMPLE = {
   function reviewKeys(e) {
     var R = TG.RV; if (!R || R.mode !== 'queue') return;
     if (e.target && (e.target.tagName === 'SELECT' || (e.target.tagName === 'INPUT' && e.target.type === 'text'))) return;
-    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.repeat || e.isComposing || e.altKey || e.ctrlKey || e.metaKey) return;
     if (R.pos >= R.queue.length) { if (e.key === 'z' || e.key === 'Z') { e.preventDefault(); reviewUndo(); } return; }
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
       e.preventDefault();
@@ -4126,7 +4288,7 @@ TG.SAMPLE = {
       if (!visible.has(k) || TG.needsPurchaseDetails(D.rows[i], D.res[i])) delete B.sel[k];
     });
     var groups = {}, order = [];
-    B.items.forEach(function (i) { var g = D.res[i].typeLabel; if (!groups[g]) { groups[g] = []; order.push(g); } groups[g].push(i); });
+    B.items.slice().sort(function(i,j){function caution(k){return D.res[k].notes.some(function(n){return n.kind==='dup'||n.kind==='parse';})?1:0;}return caution(j)-caution(i);}).forEach(function (i) { var g = D.res[i].typeLabel; if (!groups[g]) { groups[g] = []; order.push(g); } groups[g].push(i); });
     var cnt = { biz: 0, pvt: 0, hold: 0 };
     Object.keys(B.sel).forEach(function (k) { cnt[B.sel[k]]++; });
     var seg = function (k, v) {
@@ -4148,15 +4310,16 @@ TG.SAMPLE = {
             : seg(row.key, B.sel[row.key]);
           /* 同じ日・同じ店・同じ金額の行は、まとめて確定する前に気づけるよう、どの行どうしかを元の行番号で示す */
           var sourceLine = r.dupLines && r.notes.some(function (n) { return n.kind === 'dup'; }) ? '重複の可能性（元明細の' + TG.lineList(r.dupLines) + 'が同じ日・店・金額）' : '';
-          var meta = [dateLbl(row), (row.dir === 'in' ? '入金 ' : '') + amt(row) + '円'];
+          var meta = [dateLbl(row), (row.dir === 'in' ? '入金 ' : '') + amountWithUnit(row) + ''];
           if (sourceLine) meta.push(sourceLine);
           if (!common) meta.push(esc(r.short));
           return '<div class="bulk-row"><div><div class="bn">' + esc(row.raw.desc || '（摘要なし）') + '</div><div class="bm">' + meta.join('・') + '</div>' + rowNotesHtml(row) + '</div>' + action + '</div>';
         }).join('') + '</div>';
       }).join('') + '</div>';
+    var kept=0,changed=0; Object.keys(B.sel).forEach(function(k){var v=B.sel[k];if(v!=='hold'){if(v===B.cat)kept++;else changed++;}});
     var parts = []; if (cnt.biz) parts.push('事業 ' + cnt.biz); if (cnt.pvt) parts.push('私用 ' + cnt.pvt);
     var foot = '<div class="dlg-f"><button type="button" class="btn" data-act="close" data-dlg="dlg-bulk">閉じる</button><span class="grow"></span>' + (cnt.hold ? '<span class="lane-d" style="margin:0">保留 ' + cnt.hold + '件は未確認のまま</span>' : '') +
-      (Object.keys(B.sel).length ? '<button type="button" class="btn primary" data-act="bk-commit"' + ((cnt.biz + cnt.pvt) ? '' : ' disabled') + '>この内容で確定する（' + (parts.join('・') || '0件') + '）</button>' : '') + '</div>';
+      (Object.keys(B.sel).length ? '<button type="button" class="btn primary" data-act="bk-commit"' + ((cnt.biz + cnt.pvt) ? '' : ' disabled') + '>この内容で確定する（' + (parts.join('・') || '0件') + '）<small>候補どおり'+kept+'件・変更'+changed+'件・保留'+cnt.hold+'件</small></button>' : '') + '</div>';
     var inner = $('.dlg-in', dlg);
     var scroll = $('.dlg-b', inner) ? $('.dlg-b', inner).scrollTop : 0;
     inner.innerHTML = dlgHead('dlg-bulk', TG.CAT[B.cat].label + ' ' + B.items.length + '件を確認して確定') + body + foot;
@@ -4210,6 +4373,7 @@ TG.SAMPLE = {
       (st.summary.length ? '<div class="opt-row"><label><input type="checkbox" id="imp-sum"' + (S.ds.includeSummary ? ' checked' : '') + '>「合計」など、集計の行と判断した ' + st.summary.length + '行も明細として含める</label></div>' : '') +
       (issues.length ? '<ul class="issue-list">' + issues.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : '') +
       '<p class="lane-d" style="margin:8px 0">書き出すCSVには、ここで選んだ列の値を元の表記のまま使います。</p>' +
+      '<details><summary>日付の順序・省略された年を設定</summary><label>日付の順序 <select id="date-order">'+[['','自動（曖昧な日付は未判定）'],['ymd','年／月／日'],['mdy','月／日／年'],['dmy','日／月／年']].map(function(v){return '<option value="'+v[0]+'"'+((S.ds.opts.dateOrder||'')===v[0]?' selected':'')+'>'+v[1]+'</option>';}).join('')+'</select></label> <label>先頭の年（年を省いた明細）<input type="number" id="date-year" min="1900" max="2199" value="'+esc(S.ds.opts.startYear||'')+'"></label></details>'+
       '<h3 style="font-size:14px;margin:10px 0 6px">読み取りの例（先頭5件）</h3><div class="tbl-wrap"><table class="pv"><thead><tr><th>日付</th><th>摘要</th><th>金額</th></tr></thead><tbody>' + prev + '</tbody></table></div>' +
       '<details class="imp-more"><summary>ファイルの情報</summary><dl class="kv"><dt>ファイル</dt><dd>' + esc(S.ds.name) + '</dd>' +
       (excel ? '<dt>形式</dt><dd>Excel（シート「' + esc(src.sheet) + '」）</dd>' : '<dt>文字コード</dt><dd>' + esc(st.encoding) + '</dd><dt>区切り</dt><dd>' + (st.delim === '\t' ? 'タブ' : st.delim === ';' ? 'セミコロン' : 'カンマ') + '</dd>') +
@@ -4225,8 +4389,22 @@ TG.SAMPLE = {
     var o = {}; Object.keys(S.ds.opts || {}).forEach(function (k) { o[k] = S.ds.opts[k]; });
     var an = D.st.analysis;
     o.roles = roles; o.headerIndex = an.headerIndex >= 0 ? an.headerIndex : (an.dataStart || 0) - 1;
+    o.dateOrder = $('#date-order',dlg).value;
+    o.startYear = $('#date-year',dlg).value;
     var po = $('input[name="posout"]:checked', dlg); if (po) o.posIsOut = po.value === '1';
     var sum = $('#imp-sum', dlg);
+    var proposed = TG.readText(S.ds.text,S.ds.name,S.ds.encoding,o,S.ds.source);
+    var newRows = proposed.rows.concat(sum && sum.checked ? proposed.summary : []);
+    var byLine = new Map(newRows.map(function(row){return [row.line,row];}));
+    var affected = D.rows.filter(function(row){
+      var next = byLine.get(row.line);
+      return S.dec[row.key] && (!next || JSON.stringify([row.raw,row.dir,row.notesText,row.date,row.amount]) !== JSON.stringify([next.raw,next.dir,next.notesText,next.date,next.amount]));
+    });
+    function apply() {
+    affected.forEach(function(row){
+      var old=S.dec[row.key]; TG.decideRow(row.key,null);
+      if (old.memo || old.purchase) S.purchaseDetails[row.key]={item:old.purchase && old.purchase.item || '',memoDraft:old.memo || ''};
+    });
     var before = snapshot();
     S.ds.opts = o; if (sum) S.ds.includeSummary = sum.checked;
     TG.recompute(); D = TG.D;
@@ -4236,6 +4414,12 @@ TG.SAMPLE = {
     dlg.close();
     render();
     toast('読み取り方を反映しました。' + (m.n ? movedText(m) : ''));
+    }
+    if (affected.length) confirmDlg('内容が変わる明細を再確認しますか？',affected.length+'件の確定を外し、メモを下書きに残します。'+affected.slice(0,12).map(function(r){
+      function describe(v){return v ? [v.date && v.date.iso || v.raw.date,v.raw.desc,v.raw.amount,v.dir==='in'?'入金':'支払い',v.notesText].filter(Boolean).join(' ／ '):'対象から外れる';}
+      return '<br>元行'+r.line+'　変更前 '+esc(describe(r))+' → 変更後 '+esc(describe(byLine.get(r.line)));
+    }).join('')+(affected.length>12?'（先頭12件を表示）':''),'変更して再確認',apply);
+    else apply();
   }
 
   /* ---------- 仕分けの決まり（判定表） ---------- */
@@ -4261,12 +4445,18 @@ TG.SAMPLE = {
       '<li>「車は使わない」のように、使わないと書いたもの：私用候補。</li></ol>' +
       '<h3 style="font-size:14px;margin:0">3. 区分は変えずに知らせること</h3><ul class="fine" style="margin:4px 0 0">' +
       '<li>重複の可能性（同じ日・同じ店・同じ金額）。どちらの行も消さずに残します。</li><li>定期的な支払い（同じ店・同じ金額が別の月にもある）。</li><li>返金の元と返金の行。</li></ul>' +
-      '<h3 style="font-size:14px;margin:10px 0 0">4. あなたの確定とツール仕分け</h3><p class="lane-d" style="margin:4px 0 0">確定・記入・メモは、ツール仕分けと理由を書き換えません。CSVの「ツール仕分け」は最初の判定のまま残し、あなたが確定した区分は「最終区分」に書きます。要判断を確定した行と、候補から変えた行には、理由の最後に「確定：」を付けます。記入とメモも、理由の最後に残します。仕事と私用の両方に使った支払いは、その内容をメモに残せます。</p></div>';
+      '<h3 style="font-size:14px;margin:10px 0 0">4. あなたの確定とツール仕分け</h3><p class="lane-d" style="margin:4px 0 0">確定・記入・メモは、ツール仕分けと理由を書き換えません。プロフィール・追加回答を変更すると候補は再計算します。あなたが確定した区分は「最終区分」に書きます。要判断を確定した行と、候補から変えた行には、理由の最後に「確定：」を付けます。記入とメモも、理由の最後に残します。仕事と私用の両方に使った支払いは、その内容をメモに残せます。</p></div>';
     var foot = '<div class="dlg-f"><span class="grow"></span><button type="button" class="btn primary" data-act="close" data-dlg="dlg-how">閉じる</button></div>';
     openDlg('dlg-how', '仕分けの決まり', body, foot, { raw: true });
   }
 
   /* ---------- 引き継ぎファイル（プロフィール・追加の質問の答え・覚えた店） ---------- */
+  function saveWorkFile(){
+    var file=new Blob([JSON.stringify({app:'tegakari-work',v:1,state:S})],{type:'application/json'});
+    var link=document.createElement('a');link.href=URL.createObjectURL(file);link.download='てがかり仕分け_作業ファイル.json';
+    document.body.appendChild(link);link.click();setTimeout(function(){URL.revokeObjectURL(link.href);link.remove();},1500);
+    toast('明細・確定・保留とメモを含む作業ファイルのダウンロードを開始しました。');
+  }
   function backupSave() {
     var data = { app: 'tegakari-shiwake', v: 1, savedAt: new Date().toISOString(), profile: S.profile, answers: S.answers, rules: S.rules };
     var blob = new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' });
@@ -4274,11 +4464,41 @@ TG.SAMPLE = {
     document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
     toast('プロフィール・追加の質問の答え・覚えた店を保存しました。');
   }
+  function readSavedProfile(d) {
+    function dictionary(v){return v && typeof v==='object' && !Array.isArray(v);}
+    if (!dictionary(d.profile) || !['job','tools','places','other'].every(function(k){return d.profile[k]==null || typeof d.profile[k]==='string';}) ||
+      !dictionary(d.answers||{}) || !Object.values(d.answers||{}).every(function(a){return a==='yes' || a==='no';}) ||
+      !Array.isArray(d.rules||[]) || !(d.rules||[]).every(function(r){return dictionary(r) && Array.isArray(r.tokens) && r.tokens.every(function(t){return typeof t==='string';}) && ['biz','pvt'].includes(r.final);})) throw new Error('プロフィール・回答・覚えた店の形式を確認してください。');
+  }
   function backupLoad(file) {
     if (!file) return;
     file.text().then(function (t) {
       var d = JSON.parse(t);
+      if (d && d.app==='tegakari-work' && d.v===1) {
+        var incoming=d.state;
+        if (!incoming || incoming.v!==1 || !incoming.profile || !Array.isArray(incoming.rules) || (incoming.ds && typeof incoming.ds.text!=='string')) throw new Error('作業ファイルの形式を確認してください。');
+        readSavedProfile(incoming);
+        var staged=TG.defaultState();
+        Object.keys(staged).forEach(function(k){if(Object.prototype.hasOwnProperty.call(incoming,k)) staged[k]=incoming[k];});
+        if(staged.ds && (typeof staged.ds.id!=='string'||typeof staged.ds.name!=='string'||typeof staged.ds.opts!=='object')) throw new Error('明細の情報を読み取れません。');
+        [staged.dec,staged.purchaseDetails,staged.ds && staged.ds.transitHeld,staged.ds && staged.ds.deferred].forEach(function(map){
+          if(map!=null && (typeof map!=='object'||Array.isArray(map)||Object.keys(map).some(function(k){return !/^r[1-9][0-9]*$/.test(k); }))) throw new Error('元行の記録を読み取れません。');
+        });
+        if(staged.exported && (!Number.isFinite(staged.exported.at) || typeof staged.exported.name!=='string' || staged.exported.rows && (typeof staged.exported.rows!=='object' || Array.isArray(staged.exported.rows) || !Object.values(staged.exported.rows).every(function(cells){return Array.isArray(cells) && cells.length===6 && cells.every(function(v){return typeof v==='string';});})))) throw new Error('CSVの出力記録を確認してください。');
+        TG.migrate(staged);
+        if(staged.ds) {
+          var inspected=TG.readText(staged.ds.text,staged.ds.name,staged.ds.encoding,staged.ds.opts,staged.ds.source);
+          var stop=TG.checkStatement(inspected,staged.ds.name);if(stop) throw new Error(stop);
+        }
+        confirmDlg('作業ファイルから再開しますか？','このタブの明細・確定・保留・プロフィールを「'+esc(staged.ds && staged.ds.name || '明細なし')+'」の作業で置き換えます。','再開する',function(){
+          TG.S=S=staged;TG.D=D={};TG.recompute();D=TG.D;S.view=S.ds?'board':'profile';save(true);
+          var rules=$('#dlg-rules');if(rules) rules.close();render();
+        });return;
+      }
       if (!d || d.app !== 'tegakari-shiwake' || !d.profile) throw new Error('てがかり仕分けの引き継ぎファイルではありません');
+      if (d.v!==1) throw new Error('保存形式を確認してください。');
+      readSavedProfile(d);
+      function applyProfile(){
       var keys = {}; S.rules.forEach(function (e) { keys[e.datasetId + '|' + e.key] = 1; });
       var added = 0; (d.rules || []).forEach(function (e) { if (e && e.tokens && !keys[e.datasetId + '|' + e.key]) { S.rules.push(e); added++; } });
       S.profile = { job: d.profile.job || '', tools: d.profile.tools || '', places: d.profile.places || '', other: d.profile.other || '' };
@@ -4287,6 +4507,8 @@ TG.SAMPLE = {
       var dl = $('#dlg-rules'); if (dl) dl.close();
       if (S.view === 'intro') S.view = 'profile';
       render(); toast('引き継ぎファイルを読み込みました（プロフィールと、覚えた店 ' + added + '件）。');
+      }
+      if (S.ds || Object.values(S.profile).some(Boolean) || Object.keys(S.answers).length || S.rules.length) confirmDlg('プロフィールと回答を置き換えますか？','プロフィール・追加回答を更新し、保存された店の記録 '+(d.rules||[]).length+'件を照合して追加します。現在の明細と確定は保持します。','読み込む',applyProfile);else applyProfile();
     }).catch(function (e) { toast('読み込めませんでした：' + e.message); });
   }
 
@@ -4389,7 +4611,10 @@ TG.SAMPLE = {
         $('.ref-match',line).hidden = !pattern || !hit;
         if (hit) hits.push(line.dataset.key);
       });
-      group.hidden = (!!fare.value && group.dataset.fare !== fare.value) || (!!(query || time) && !hits.length);
+      group.hidden = (!!fare.value && group.dataset.fare !== fare.value) || (!!query && !hits.length);
+      var clockNote=$('.clock-note',group);
+      if(!clockNote){clockNote=document.createElement('p');clockNote.className='clock-note';group.appendChild(clockNote);}
+      clockNote.textContent=time ? (hits.length ? '以前のメモに '+time+' の記録あり' : '以前のメモにこの時刻の記録なし。利用詳細で照合してください。') : '';
       var question = $('.ride-origin',group), ask = !group.hidden && time && hits.length === 1;
       var open = $('[data-act="swap-rides"]',group);
       open.hidden = !!ask;
@@ -4409,7 +4634,7 @@ TG.SAMPLE = {
     list.scrollTop = 0;
     $('#ride-ref-count',panel).textContent = fare.value ?
       (!count ? 'メモに一致する時刻がありません。時刻を空欄にすると、その日付・金額の組を確認できます。' :
-        time ? '前回のメモに ' + time + ' がある組：' + count + '組' : count + '組。利用詳細の元行・時刻・用途を照合してください。') :
+        time ? '同じ日付・金額：' + count + '組。メモの時刻と利用詳細を照合してください。' : count + '組。利用詳細の元行・時刻・用途を照合してください。') :
       !query ? '全' + count + '組' : !count ? '一致する組はありません。番号の表記を確認するか、下の日付・金額で探してください。' :
       count + '組が一致' + (count > 1 ? '。日付と元行を利用詳細で確認してください。' : '。元行を利用詳細で確認してください。');
     $('[data-act="clear-ride-ref"]',panel).hidden = !ref.value;
@@ -4444,19 +4669,21 @@ TG.SAMPLE = {
       var mate = confirmedRideMate(i);
       if (!mate || row.line >= mate.line) return;
       var fare = row.date.iso + '|' + row.amount;
-      fares.set(fare,row.date.iso + '　' + amt(row) + '円');
-      pairs.push('<li data-fare="' + esc(fare) + '"><b>' + dateLbl(row) + '　' + amt(row) + '円</b>　' + esc(row.raw.desc) +
+      fares.set(fare,row.date.iso + '　' + amountWithUnit(row) + '');
+      pairs.push('<li data-fare="' + esc(fare) + '"><b>' + dateLbl(row) + '　' + amountWithUnit(row) + '</b>　' + esc(row.raw.desc) +
         '<p class="saved-caption">前回保存した区分とメモ</p><p>' + pairLine(row) + pairLine(mate) + '</p>' +
         '<button type="button" class="btn sm" data-act="swap-rides" data-key="' + esc(row.key) + '">' + row.line + '・' + mate.line + '行目の取り違えを訂正</button></li>');
     });
-    return pairs.length ? '<section class="ex-swaps" aria-labelledby="swap-heading"><h2 id="swap-heading">保存後に乗車の取り違えに気づいたら</h2>' +
+    var multi=D.rows.filter(function(row,i){var r=D.res[i];return r.transport==='ride'&&r.dup&&r.dup.length>1&&S.dec[row.key];});
+    var otherGroups=multi.length ? '<section class="ex-multi"><h2>同条件の乗車が3件以上ある明細</h2><p>利用詳細で特定できた元行だけを開いて直せます。</p>'+multi.map(function(row){return '<button class="btn sm" data-act="open" data-key="'+row.key+'">'+dateLbl(row)+' 元明細'+row.line+'行目 '+esc(decisionLabel(S.dec[row.key]))+'</button>';}).join(' ')+'</section>' : '';
+    return otherGroups + (pairs.length ? '<section class="ex-swaps" aria-labelledby="swap-heading"><h2 id="swap-heading">保存後に乗車の取り違えに気づいたら</h2>' +
       (pairs.length > 1 ? '<label class="ref-label" for="ride-ref">利用番号で探す</label><div class="ref-search"><input type="search" id="ride-ref" maxlength="200" autocomplete="off" spellcheck="false" aria-describedby="ride-ref-help" aria-controls="ride-pair-list">' +
         '<button type="button" class="btn sm" data-act="clear-ride-ref" hidden>解除</button></div><p id="ride-ref-help">確定時のメモに書いた利用番号を、省略せず入力してください。</p>' +
         '<label class="ref-label" for="ride-fare">番号を記録していないときは日付・金額で探す</label><select id="ride-fare"><option value="">すべての日付・金額</option>' +
         Array.from(fares.keys()).sort().map(function (k) { return '<option value="' + esc(k) + '">' + esc(fares.get(k)) + '</option>'; }).join('') +
         '</select><label class="ride-time-field" hidden>乗車時刻（メモにある場合）<input type="time" id="ride-time"></label>' +
         '<p id="ride-ref-count" role="status">全' + pairs.length + '組</p>' : '<p>利用詳細の元行・利用番号と、確定した内容を照合してください。</p>') +
-      '<ul id="ride-pair-list">' + pairs.join('') + '</ul></section>' : '';
+      '<ul id="ride-pair-list">' + pairs.join('') + '</ul></section>' : '');
   }
   function swapRides(button,origin) {
     var key = button.getAttribute('data-key'), i = D.byKey[key], other = confirmedRideMate(i);
@@ -4467,7 +4694,7 @@ TG.SAMPLE = {
         '</dd><dt>訂正後</dt><dd><strong>' + decisionLabel(after) + '</strong>　<span class="swap-memo">' + esc(after.memo || 'メモなし') + '</span></dd></dl>' +
         '<label class="swap-number">' + line + '行目に追加する利用番号（任意）<input type="text" maxlength="200" autocomplete="off" spellcheck="false"></label></section>';
     }
-    var body = '<div class="dlg-b swap-preview"><p>' + dateFull(row) + '　' + amt(row) + '円　' + esc(row.raw.desc) + '</p>' +
+    var body = '<div class="dlg-b swap-preview"><p>' + dateFull(row) + '　' + amountWithUnit(row) + '　' + esc(row.raw.desc) + '</p>' +
       (origin ? '<p class="swap-origin"><strong>' + esc(origin) + '</strong></p>' : '') +
       change(row.line,a,b) + change(other.line,b,a) + '<p>この2件の区分とメモを入れ替えます。次に訂正版のCSVを保存してください。</p></div>';
     var foot = '<div class="dlg-f"><button type="button" class="btn" data-act="close" data-dlg="dlg-swap">やめる</button><span class="grow"></span>' +
@@ -4488,7 +4715,7 @@ TG.SAMPLE = {
     });
     $('#swap-apply',dlg).addEventListener('click',function () {
       if (!dlg.open || !inputs[0].reportValidity() || !inputs[1].reportValidity()) return;
-      var saved = TG.storageError ? S : TG.load();
+      var saved = TG.storageError ? S : TG.load(false);
       if (!saved.ds || saved.ds.id !== dataset || JSON.stringify(saved.dec) !== JSON.stringify(S.dec) ||
           confirmedRideMate(i) !== other || a !== S.dec[key] || b !== S.dec[other.key]) {
         dlg.close(); toast('明細が更新されました。ページを開き直して、もう一度照合してください。'); return;
@@ -4513,9 +4740,17 @@ TG.SAMPLE = {
   function viewExport() {
     var t = D.tally, left = t.all - t.done;
     var csv = TG.buildCsv(D.rows, D.res, S.dec, { bom: S.bom });
+    var currentOutput = TG.parseCSV(csv.replace(/^\uFEFF/, ''), ',').slice(1);
+    var changedRows = [], removedKeys = [];
+    if (S.exported && S.exported.rows) {
+      D.rows.forEach(function(row,i){var old=S.exported.rows[row.key]; if(JSON.stringify(old)!==JSON.stringify(currentOutput[i])) changedRows.push({row:row,old:old,current:currentOutput[i]});});
+      removedKeys=Object.keys(S.exported.rows).filter(function(key){return D.byKey[key]===undefined;});
+      S.exported.needsReexport = changedRows.length>0 || removedKeys.length>0;
+    }
     var v = left ? null : TG.verifyCsv(csv, D.rows, D.res, S.dec);
     TG.lastVerify = v;
     var outputTable = TG.parseCSV(csv.replace(/^﻿/, ''), ',');
+    var uncovered = D.rows.filter(function(r){return S.dec[r.key] && r.amount===null;});
     var sumB = { out: 0, inn: 0 }, sumP = { out: 0, inn: 0 };
     D.rows.forEach(function (row) {
       var d = S.dec[row.key];
@@ -4524,6 +4759,7 @@ TG.SAMPLE = {
       sum[flow] = TG.addAmounts(sum[flow], row.amount);
     });
     var totals = '<div class="ex-sum"><div class="b">事業<b class="num">' + t.finalBiz + '件</b><span class="num">支払い ' + TG.yen(sumB.out) + '円' + (+sumB.inn ? '／入金 ' + TG.yen(sumB.inn) + '円' : '') + '</span></div><div class="p">私用<b class="num">' + t.finalPvt + '件</b><span class="num">支払い ' + TG.yen(sumP.out) + '円' + (+sumP.inn ? '／入金 ' + TG.yen(sumP.inn) + '円' : '') + '</span></div></div>';
+    if(uncovered.length) totals += '<section class="imp-warn">円で集計できた '+(t.done-uncovered.length)+'件／確定 '+t.done+'件。集計に含まない '+uncovered.length+'件：'+uncovered.map(function(row){return '<button class="btn link" data-act="open" data-key="'+row.key+'">元行'+row.line+' '+esc(row.raw.amount)+' '+esc(row.currency||'金額不明')+'</button>';}).join(' ')+'</section>';
     var chk = function (ok, title, sub) { return '<li class="' + (ok ? 'ok' : 'ng') + '">' + (ok ? IC.ok : IC.ng) + '<div><b>' + title + '</b><span>' + sub + '</span></div></li>'; };
     var excluded = D.st.summary.length && !S.ds.includeSummary ? '（集計行と判断した ' + D.st.summary.length + '行は除いています。「読み取り方を見る」で含められます）' : '';
     var checks = '<ul class="checks">' +
@@ -4531,7 +4767,7 @@ TG.SAMPLE = {
       chk(!left, left ? 'あと ' + left + '件が未確認です' : '最終区分は、すべてあなたが確定しました', left ? '未確認の明細を確定すると、書き出せます。' : '事業 ' + t.finalBiz + '件・私用 ' + t.finalPvt + '件。') +
       chk(!!(v && v.ok), '日付・摘要・金額は、元の表記のまま', (v ? (v.ok ? '書き出す内容を読み直して、' + v.rowsOut + '行すべてを1行ずつ照合しました。' : esc(v.problems.slice(0, 3).join(' '))) : 'すべて確定したあとに、書き出す内容を読み直して照合します。') +
         (S.ds.source && S.ds.source.kind === 'xlsx' ? ' Excelのファイルから読んだ日付は「2026/09/01」の形、金額はセルの数値（桁区切りなし）で書き出します。' : '')) +
-      chk(true, '列：' + TG.CSV_HEADER.join('／'), 'ツール仕分けは最初の判定のまま（事業候補 ' + t.biz.n + '件・要判断 ' + t.ask.n + '件・私用候補 ' + t.pvt.n + '件）です。要判断を確定した行と候補から変えた行は、理由の最後に「確定：」を付けます。記入とメモも理由の最後に残します。') + '</ul>';
+      chk(true, '列：' + TG.CSV_HEADER.join('／'), 'ツール仕分けは表示中のプロフィール・回答で計算します（事業候補 ' + t.biz.n + '件・要判断 ' + t.ask.n + '件・私用候補 ' + t.pvt.n + '件）です。要判断を確定した行と候補から変えた行は、理由の最後に「確定：」を付けます。記入とメモも理由の最後に残します。') + '</ul>';
     var table = outputTable.slice(0, 13);
     var pv = '<div class="tbl-wrap"><table class="pv"><thead><tr>' + table[0].map(function (h) { return '<th>' + esc(h) + '</th>'; }).join('') + '</tr></thead><tbody>' + table.slice(1).map(function (r) { return '<tr>' + r.map(function (c, j) { return '<td class="' + ['d', 'n', 'r', 'c', 'c', 'why'][j] + '">' + esc(c) + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table></div>';
     var ready = !left && v && v.ok;
@@ -4544,13 +4780,14 @@ TG.SAMPLE = {
       '<p class="hint ex-where">保存先は、ふつう「ダウンロード」フォルダです（iPhone・iPadは「ファイル」アプリの「ダウンロード」）。見つからないときは、ブラウザのメニューの「ダウンロード」を開いてください。</p>' +
       (lastTransitReview && lastTransitReview.dataset === S.ds.id && S.dec[lastTransitReview.key] ? '<button type="button" class="btn link" data-act="open" data-key="' + lastTransitReview.key + '">最後に確認した明細を見直す（元明細の' + D.rows[D.byKey[lastTransitReview.key]].line + '行目）</button>' : '') +
       (left ? '<p class="hint" style="font-size:13px;margin:8px 0 0">あと ' + left + '件を確定すると書き出せます。<button type="button" class="btn link" data-go="board">未確認の明細を見る</button></p>' : '') +
+      (S.exported && !pending ? '<label class="ex-received"><input type="checkbox" id="export-received"'+(S.exported.received?' checked':'')+'> 手元に「'+esc(S.exported.name)+'」があることを確認した</label>' : '') +
       (S.exported ? '<div class="ex-done" role="status">' + (pending ? '訂正前に保存したファイル' : S.exported.revision ? '最後に保存した訂正版' : '前回書き出したファイル') +
         '：' + esc(S.exported.name) + (pending || S.exported.revision ? '' : '<br>書き出したあとに内容を変えた場合は、もう一度書き出してください。') + '</div>' : '') +
       exportedRidePairs() +
       '<div class="ex-keep"><h2>次の明細や、別のパソコンで続けるとき</h2><p>作業の続き（今の明細の確定・メモ）は、このブラウザにだけ保存されています。プロフィール・追加の質問の答え・覚えた店は、引き継ぎファイルに保存しておくと、来年の明細や別のパソコンでも使えます。</p>' +
-      '<button type="button" class="btn sm" data-act="backup-save">' + IC.dl + '引き継ぎファイルを保存</button></div>' +
+      '<button type="button" class="btn sm" data-act="backup-save">' + IC.dl + 'プロフィールと覚えた店を保存</button> <button class="btn sm" data-act="work-save">今の明細・メモを含む作業ファイルを保存</button></div>' +
       '<p class="lane-d" style="margin:12px 0 0">' + esc(TG.DISCLAIMER) + '</p></aside>' +
-      '<div class="ex-preview">' + checks + '<h2 style="font-size:15px;margin:16px 0 6px">書き出す内容（先頭12行）</h2>' + pv + '</div></div></section>';
+      '<div class="ex-preview">' + (removedKeys.length ? '<p>前回の出力から外れた元行：'+removedKeys.map(function(key){return esc(key.slice(1));}).join('、')+'</p>' : '') + (changedRows.length ? '<section class="card-box"><h2>前回の出力から変わった '+changedRows.length+'件</h2>'+changedRows.map(function(x){return '<p>元明細'+x.row.line+'行目　'+esc(x.row.raw.desc)+'　'+esc(x.old ? x.old[4] : '追加')+' → '+esc(x.current[4])+'</p><details><summary>理由・メモの変更を見る</summary><p>'+esc(x.old && x.old[5] || '')+'</p><p>'+esc(x.current[5])+'</p></details>';}).join('')+'</section>' : '') + checks + '<h2 style="font-size:15px;margin:16px 0 6px">書き出す内容（先頭12行）</h2>' + pv + '</div></div></section>';
   }
   function download() {
     var csv = TG.buildCsv(D.rows, D.res, S.dec, { bom: S.bom });
@@ -4564,7 +4801,8 @@ TG.SAMPLE = {
       document.body.appendChild(a); a.click();
       setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
     }
-    var record = S.exported = { at: Date.now(), name: name, revision: revision };
+    var records = {}; TG.parseCSV(csv.replace(/^\uFEFF/,''),',').slice(1).forEach(function(cells,i){records[D.rows[i].key]=cells;});
+    var record = S.exported = { received:false, at: Date.now(), name: name, revision: revision, rows: records };
     lastExportCsv = csv.replace(/^\uFEFF/, '');
     save(true); render();
     csvDigest(lastExportCsv).then(function (digest) {
@@ -4574,11 +4812,12 @@ TG.SAMPLE = {
         save(true);
       }
     });
-    toast('書き出しました：' + name + '（ふつうは「ダウンロード」フォルダに入ります）');
+    toast('ダウンロードを開始しました：' + name + '（ふつうは「ダウンロード」フォルダに入ります）');
   }
 
   /* ---------- 操作 ---------- */
   var ACT = {
+    'work-save': function(){saveWorkFile();},
     'privacy': openPrivacy, 'rules': openRules, 'paste': openPaste,
     'close': function (b) { var d = document.getElementById(b.getAttribute('data-dlg')); if (d) d.close(); },
     'example': function (b) {
@@ -4591,17 +4830,23 @@ TG.SAMPLE = {
     'sample': function () {
       var ex = TG.EXAMPLES[TG.SAMPLE.profile];
       var start = function () {
+        if (!TG.practice) { TG.leaving=true; save(true); TG.leaving=false; }
+        try { sessionStorage.setItem('tegakari.practice','1'); } catch(e){toast('このタブで練習を保存できません。');return;}
+        TG.practice=true; TG.savedBase=sessionStorage.getItem(TG.KEY);
+        TG.S=S=TG.defaultState(); TG.D=D={};
         S.profile = { job: ex.job, tools: ex.tools, places: ex.places, other: ex.other };
         S.answers = {}; S.skipTopics = {};
         save(true);
         handleFile(new File([TG.SAMPLE.text], TG.SAMPLE.name, { type: 'text/csv' }), true);
       };
       var own = ['job', 'tools', 'places', 'other'].some(function (f) { return (S.profile[f] || '').trim() && S.profile[f] !== ex[f]; });
-      var work = S.ds && D.tally && (D.tally.done || Object.keys(S.purchaseDetails || {}).length);
+      var held = Object.keys(S.ds && S.ds.transitHeld || {}).length;
+      var work = S.ds && D.tally && (D.tally.done || held || Object.keys(S.purchaseDetails || {}).length);
       var answered = Object.keys(S.answers || {}).length > 0;
-      if (own || work || answered) confirmDlg('サンプルで試しますか？', '副業のプロフィールと明細が、配布の架空データ（ライターの記入例と明細A）に置き換わります。' + (answered ? '追加質問の回答も消去されます。' : '') + (S.ds ? '今の明細（' + esc(S.ds.name) + '）の確定区分・メモは、この画面から取り出せなくなります。' : ''), 'サンプルで試す', start);
+      if (own || work || answered) confirmDlg('サンプルで試しますか？', '練習用のプロフィールと明細Aを開きます。' + (S.ds ? '現在の「'+esc(S.ds.name)+'」は記録待ち '+held+'件です。' : '') + (answered ? '追加質問の回答があります。' : '') + (TG.practice ? '今の練習内容を最初に戻します。' : '本番の記録は「自分の明細に戻る」で再開できます。'), 'サンプルで試す', start);
       else start();
     },
+    'sample-end': function () { endPractice(); render(); },
     'paste-apply': function () {
       var t = $('#paste-ta'); if (!t || !t.value.trim()) { toast('貼り付ける文を入れてください。'); return; }
       var sp = TG.splitProfileText(t.value);
@@ -4646,6 +4891,7 @@ TG.SAMPLE = {
     'topic': function (b) {
       var id = b.getAttribute('data-t'), a = b.getAttribute('data-a');
       var before = snapshot();
+      S.ds.questionsUsed=(S.ds.questionsUsed||0)+1;
       S.answers[id] = a; save(true);
       TG.recompute(); D = TG.D;
       var m = diffMoved(before);
@@ -4654,6 +4900,7 @@ TG.SAMPLE = {
       var q = $('.qcard .btn'); if (q) q.focus(); else { var n = $('.next .btn'); if (n) n.focus(); }
     },
     'topic-skip': function (b) {
+      S.ds.questionsUsed=(S.ds.questionsUsed||0)+1;
       S.skipTopics[b.getAttribute('data-t')] = true; save(true);
       TG.recompute(); D = TG.D; render();
       var q = $('.qcard .btn'); if (q) q.focus(); else { var n = $('.next .btn'); if (n) n.focus(); }
@@ -4678,6 +4925,10 @@ TG.SAMPLE = {
     'ride-origin': checkRideOrigin,
     'clear-ride-ref': function () { var input = $('#ride-ref'); input.value = ''; filterRidePairs(input); input.focus(); },
     'rv-decide': function (b) { reviewDecide(b.getAttribute('data-final')); },
+    'defer-normal': function(){
+      var R=TG.RV,k=R.queue[R.pos];saveDraft();
+      S.ds.deferred=S.ds.deferred||{};S.ds.deferred[k]=true; save(true);deferReview();
+    },
     'rv-skip': deferReview,
     'rv-hold-pair': deferRidePair,
     'transit-queue': openTransitGroup,
@@ -4696,6 +4947,7 @@ TG.SAMPLE = {
     'wipe': function () { confirmDlg('この端末の記録をすべて消しますか？', 'プロフィール、読み込んだ明細、確定した区分とメモ、覚えた店を、このブラウザから消します。元に戻せません。', 'すべて消す', function () { TG.clearAll(); S = TG.S; TG.recompute(); D = TG.D; render(); toast('この端末の記録をすべて消しました。'); }); },
     'confirm-ok': function () { var f = TG._confirmOk; TG._confirmOk = null; var d = $('#dlg-confirm'); if (d) d.close(); if (f) f(); },
     'how': openHow,
+    'more-cards': function(b){var c=b.dataset.cat;boardLimit[c]+=80;render();},
     'only-open': function () { S.onlyOpen = !S.onlyOpen; save(); render(); var b = $('[data-act="only-open"]'); if (b) b.focus(); },
     'rv-next': function (b) {
       var to = b.getAttribute('data-to');
@@ -4708,7 +4960,8 @@ TG.SAMPLE = {
   ACT['rules'] = openRules;
 
   function bind() {
-    window.addEventListener('pagehide', function () { saveDraft(); if (TG._saveTimer !== null) save(true); });
+    window.addEventListener('pageshow', function () { TG.leaving = false; });
+    window.addEventListener('pagehide', function () { TG.leaving = true; saveDraft(); if (TG.savePending) save(true); });
     document.addEventListener('toggle', function (e) { if (e.target && e.target.classList && e.target.classList.contains('bd-more')) boardMoreOpen = e.target.open; }, true);
     document.addEventListener('click', function (e) {
       var b = e.target.closest ? e.target.closest('[data-act],[data-go]') : null;
@@ -4724,10 +4977,22 @@ TG.SAMPLE = {
       if (f) f(b, e);
     });
     document.addEventListener('input', function (e) {
+      if(e.target.id==='board-search'){
+        boardQuery=e.target.value;boardLimit={biz:80,ask:80,pvt:80};
+        var counts={biz:0,ask:0,pvt:0};
+        D.rows.forEach(function(row,i){if(searchRows(row) && !(S.onlyOpen && S.dec[row.key])) counts[D.res[i].cat]++;});
+        var available=Object.keys(counts).find(function(cat){return counts[cat]>0;});
+        if(available && !counts[S.lane]) S.lane=available;
+        $$('.lane-tabs button').forEach(function(btn){
+          var cat=btn.dataset.lane;btn.setAttribute('aria-selected',String(S.lane===cat));
+          $('small',btn).textContent=boardQuery?'該当 '+counts[cat]+'件':D.tally[cat].n+'件・確定'+D.tally[cat].done;
+        });
+        $('#lanes').innerHTML=['biz','ask','pvt'].map(laneHtml).join('');return;
+      }
       if (e.target.id === 'ride-ref') { $('#ride-fare').value = ''; $('#ride-time').value = ''; filterRidePairs(e.target); return; }
       if (e.target.id === 'ride-time') { filterRidePairs(e.target); return; }
       if (e.target.matches && e.target.matches('textarea[data-field]')) onProfileInput(e.target);
-      else if (e.target.id === 'rv-purchase-item' || (e.target.id === 'rv-memo' && $('#rv-purchase-item'))) {
+      else if (e.target.id === 'rv-purchase-item' || e.target.id === 'rv-memo') {
         if (e.target.id === 'rv-purchase-item') itemHint();
         clearTimeout(draftTimer);
         draftTimer = setTimeout(saveDraft, 200);
@@ -4738,7 +5003,7 @@ TG.SAMPLE = {
       if (e.target.id === 'ride-time') { filterRidePairs(e.target); return; }
       var t = e.target;
       if (t.id === 'file') { handleFile(t.files && t.files[0]); }
-      else if (t.id === 'rv-purchase-item' || (t.id === 'rv-memo' && $('#rv-purchase-item'))) saveDraft();
+      else if (t.id === 'rv-purchase-item' || t.id === 'rv-memo') saveDraft();
       else if (t.hasAttribute('data-answer')) {
         var topicId = t.getAttribute('data-answer');
         if (t.value) S.answers[topicId] = t.value;
@@ -4751,6 +5016,7 @@ TG.SAMPLE = {
       }
       else if (t.id === 'backup-file' || t.id === 'backup-file-v') { backupLoad(t.files && t.files[0]); }
       else if (t.id === 'ex-bom') { S.bom = t.checked; save(true); }
+      else if (t.id==='export-received' && S.exported) {S.exported.received=t.checked;save(true);}
       else if (t.id === 'use-rules') { var before = snapshot(); S.useRules = t.checked; save(true); TG.recompute(); D = TG.D; if (S.ds) { var m = diffMoved(before); toast(movedText(m)); } render(); }
     });
     ['dragenter', 'dragover'].forEach(function (ev) {
@@ -4767,11 +5033,18 @@ TG.SAMPLE = {
   }
 
   function init() {
+    try { TG.practice = sessionStorage.getItem('tegakari.practice') === '1'; } catch (e) {}
+    TG.afterMerge = function () { setTimeout(function () { if (!$('dialog[open]')) render(); },0); };
+    TG.storageNotice = function () {
+      var notice = $('#save-warning'); if (notice) notice.hidden = !TG.storageError;
+    };
     TG.S = S = TG.load();
     TG.D = D = {};
     try { TG.recompute(); } catch (e) { S.ds = null; TG.recompute(); }
     D = TG.D;
     render(); bind();
+    try {history.replaceState({tegakari:S.view},'');}catch(e){}
+    window.addEventListener('popstate',function(e){var dlg=$('dialog[open]');if(dlg){dlg.close();try{history.pushState({tegakari:S.view},'');}catch(err){}return;} if(e.state && ['intro','profile','statement','board','export'].includes(e.state.tegakari)) go(e.state.tegakari,true,true);});
     if (TG.storageError) toast('このブラウザでは保存ができないため、ページを閉じると内容が消えます。');
   }
   TG.ui = { render: render, go: go, act: ACT, handleFile: handleFile, state: function () { return S; }, data: function () { return D; } };
