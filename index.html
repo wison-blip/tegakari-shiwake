@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 外部への通信をブラウザの設定で止める（明細もプロフィールも、この端末の外へ出ない）。スクリプトはこのファイルに埋め込んだもの（ハッシュが一致するもの）だけを動かす -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-61Q4gPsZwWpAIaR70dM8JWepEliKSJMY4y/YVy0To+M='; style-src 'unsafe-inline'; img-src data: blob:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-RBOY3N2Nzv8I/WxBwTW1qYEVTDevgSTAifx8na9FE00='; style-src 'unsafe-inline'; img-src data: blob:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light">
 <meta name="description" content="副業の内容を手がかりに、カード・銀行の明細を「事業候補・私用候補・要判断」に仕分け、本人が確定してCSVに書き出す整理ツール。データはこの端末の外へ送りません。">
@@ -3094,6 +3094,8 @@ TG.findBanned = function (text) {
  * withPerson === false のときは、ツールが作った部分だけ（禁止表現の検査用） */
 TG.reasonForCsv = function (row, r, d, withPerson) {
   var parts = [r.long];
+  // 重複する乗車の理由には、すでに対象の元行が入っている。
+  if (r.dupLines && !(r.rule === 'transport' && r.transport === 'ride')) parts.unshift('元明細の' + row.line + '行目。');
   var sourceNotes = TG.purchaseNotes(row).map(TG.reasonExcerpt).filter(function (text) { return !r.long.includes(text); });
   if (sourceNotes.length) parts.push('元明細の補足：' + sourceNotes.join(' ／ '));
   if ((r.rule === 'table' || r.rule === 'neg') && r.quoted.length && !r.long.includes(TG.readFrom(r))) {
@@ -3136,7 +3138,7 @@ TG.verifyCsv = function (csvText, rows, res, decisions) {
   rows.forEach(function (row, i) {
     var b = body[i];
     if (!b) return;
-    var at = (i + 1) + '行目';
+    var at = '元明細の' + row.line + '行目';
     if (b.length !== expected.length) problems.push(at + '：列の数が' + expected.length + 'ではありません。');
     if (b[0] !== row.raw.date) problems.push(at + '：日付が元と一致しません。');
     if (b[1] !== row.raw.desc) problems.push(at + '：摘要が元と一致しません。');
@@ -4066,7 +4068,7 @@ TG.SAMPLE = {
   }
   function cardHtml(i) {
     var row = D.rows[i], r = D.res[i], d = S.dec[row.key];
-    var sourceLine = purchaseDuplicateLine(row, r) || (boardQuery ? '元明細の'+row.line+'行目' : '');
+    var sourceLine = duplicateSourceLine(row, r) || (boardQuery ? '元明細の'+row.line+'行目' : '');
     var notes = r.notes.filter(function (n) { return n.short; }).map(function (n) { return '<span class="note' + ((n.kind === 'dup' || n.kind === 'parse') ? '' : ' soft') + '">' + esc(n.short) + '</span>'; }).join('');
     if (!d && S.ds.deferred && S.ds.deferred[row.key]) notes += '<span class="note">後日再開</span>';
     if (!d && heldTransit(row.key) && r.rule === 'transport') notes += '<span class="note soft">記録待ち</span>';
@@ -4085,8 +4087,8 @@ TG.SAMPLE = {
   TG.RV = null;
   var draftTimer = null;
   var lastTransitReview = null;
-  function purchaseDuplicateLine(row, r) {
-    return (r.transport || TG.needsPurchaseDetails(row, r)) && r.notes.some(function (n) { return n.kind === 'dup'; }) ? '元明細の' + row.line + '行目' : '';
+  function duplicateSourceLine(row, r) {
+    return r.dupLines ? '元明細の' + row.line + '行目' : '';
   }
   /* 購入品の記入欄：材料を買う人の、店名だけの明細に出す（以前に記入した明細にも出す）。
    * 記入はCSVの理由の「確定：」以降に残すだけで、ツール仕分けは変えない。 */
@@ -4161,7 +4163,7 @@ TG.SAMPLE = {
     }
     var key = R.queue[R.pos], i = D.byKey[key], row = D.rows[i], r = D.res[i], d = S.dec[key];
     var title = R.mode === 'queue' ? '要判断の確認 <span class="num">' + (R.pos + 1) + ' / ' + R.queue.length + '</span>' : '明細の確認';
-    var sourceLine = R.grouped === 'all-records' ? '元明細の' + row.line + '行目' : purchaseDuplicateLine(row, r);
+    var sourceLine = R.grouped === 'all-records' ? '元明細の' + row.line + '行目' : duplicateSourceLine(row, r);
     if (R.grouped === 'one-held') title = '乗車の照合';
     if (sourceLine) title += ' <small>' + sourceLine + '</small>';
     var meter = R.mode === 'queue' ? '<span class="rv-meter" aria-hidden="true">' + R.queue.map(function (k, p) { return '<i class="' + (p === R.pos ? 'c' : (S.dec[k] ? 'd' : '')) + '"></i>'; }).join('') + '</span>' : catChip(r.cat);
@@ -4333,9 +4335,9 @@ TG.SAMPLE = {
             ? '<button type="button" class="btn sm" data-act="bk-purchase" data-key="' + row.key + '">' + (S.dec[row.key] ? TG.CAT[S.dec[row.key].final].final + 'で確定・見直す' : '1件ずつ確認') + '</button>'
             : seg(row.key, B.sel[row.key]);
           /* 同じ日・同じ店・同じ金額の行は、まとめて確定する前に気づけるよう、どの行どうしかを元の行番号で示す */
-          var sourceLine = r.dupLines && r.notes.some(function (n) { return n.kind === 'dup'; }) ? '重複の可能性（元明細の' + TG.lineList(r.dupLines) + 'が同じ日・店・金額）' : '';
+          var sourceLine = duplicateSourceLine(row, r);
           var meta = [dateLbl(row), (row.dir === 'in' ? '入金 ' : '') + amountWithUnit(row) + ''];
-          if (sourceLine) meta.push(sourceLine);
+          if (sourceLine) meta.push(sourceLine + '（同じ日・店・金額の明細あり）');
           if (!common) meta.push(esc(r.short));
           return '<div class="bulk-row"><div><div class="bn">' + esc(row.raw.desc || '（摘要なし）') + '</div><div class="bm">' + meta.join('・') + '</div>' + rowNotesHtml(row) + '</div>' + action + '</div>';
         }).join('') + '</div>';
