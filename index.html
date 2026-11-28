@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 外部への通信をブラウザの設定で止める（明細もプロフィールも、この端末の外へ出ない）。スクリプトはこのファイルに埋め込んだもの（ハッシュが一致するもの）だけを動かす -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-KVV5wcRgtgi1lMp6d8TY/HklZOxKD/ORhwWirKqQA3c='; style-src 'unsafe-inline'; img-src data: blob:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-61Q4gPsZwWpAIaR70dM8JWepEliKSJMY4y/YVy0To+M='; style-src 'unsafe-inline'; img-src data: blob:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light">
 <meta name="description" content="副業の内容を手がかりに、カード・銀行の明細を「事業候補・私用候補・要判断」に仕分け、本人が確定してCSVに書き出す整理ツール。データはこの端末の外へ送りません。">
@@ -3718,6 +3718,17 @@ TG.SAMPLE = {
   var fileRequest = 0;
   var lastExportCsv = null;
 
+  function readSelectedFile(file) {
+    if (file.arrayBuffer) return file.arrayBuffer();
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function () { resolve(reader.result); };
+      reader.onerror = function () { reject(reader.error); };
+      reader.onabort = function () { reject(new Error('読み込みが中断されました')); };
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
   function csvDigest(csv) {
     if (!window.crypto || !window.crypto.subtle) return Promise.resolve(null);
     return window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(csv)).then(function (bytes) {
@@ -3738,8 +3749,21 @@ TG.SAMPLE = {
 
     var request = ++fileRequest;
     if (file.size > 15 * 1024 * 1024) { fileFail(TG.FILE_MESSAGES.big, true); return; }
+    var buf;
     try {
-      var buf = await (file.arrayBuffer ? file.arrayBuffer() : new Promise(function (ok, ng) { var fr = new FileReader(); fr.onload = function () { ok(fr.result); }; fr.onerror = ng; fr.readAsArrayBuffer(file); }));
+      try {
+        buf = await readSelectedFile(file);
+      } catch (error) {
+        if (request !== fileRequest) return;
+        if (!error || (error.name !== 'NotFoundError' && error.name !== 'NotReadableError')) throw error;
+        // 同じ選択を1回だけ読み直す。ここでは明細や確定内容をまだ変更しない。
+        buf = await readSelectedFile(file);
+      }
+    } catch (error) {
+      if (request === fileRequest) fileFail('「' + file.name + '」の内容を開けませんでした。この端末でファイルが開けることを確かめ、「ファイルを選ぶ」から選び直してください。', false);
+      return;
+    }
+    try {
       if (request !== fileRequest) return;
       /* ファイルの種類を見分ける（PDF・画像などは、ここで案内を出して止める）。Excel は CSV の文字列に直す */
       var dec = await TG.openFile(buf, file.name, function(sheets){
